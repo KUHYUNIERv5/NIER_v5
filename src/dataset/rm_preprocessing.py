@@ -19,10 +19,10 @@ from ..utils import region_flatten_cwdb, db_to_pkl, check_array, load_data, save
 from abc import ABC
 
 
-class MakeNIERDataset(ABC):
+class RMMakeNIERDataset(ABC):
     def __init__(self, reset_db=False, start_date=20170301, until_date=20220228, test_date=20210301, remove_region=None, seed=999,
                  preprocess_root='../dataset/d5', save_processed_data=True, run_pca=False):
-        super(MakeNIERDataset, self).__init__()
+        super(RMMakeNIERDataset, self).__init__()
         
         self.reset_db = reset_db
         self.preprocess_root = preprocess_root
@@ -40,7 +40,7 @@ class MakeNIERDataset(ABC):
             if remove_region is None:
                 save_path = 'all_region'
             else:
-                save_path = '_'.join(remove_region)
+                save_path = '-'.join(remove_region)
             self.final_data = load_data(os.path.join(self.preprocess_root, f"{save_path}.pkl"))
             # 지역_[].pkl
             # R4_77_R4_69.pkl
@@ -88,10 +88,10 @@ class MakeNIERDataset(ABC):
                 scaler=cmaq_scaler
             )
 
-            self._save_preprocessed_v1(obs, cw, ewkr, fnl, wrf, cmaq)
+            # self._save_preprocessed_v1(obs, cw, ewkr, fnl, wrf, cmaq)
         else:
             obs, cw, ewkr, fnl, wrf, cmaq = self._load_preprocessed_v1()
-            pass
+            # pass
 
         self.obs = obs
         self.cw = cw
@@ -242,13 +242,8 @@ class MakeNIERDataset(ABC):
             df = region_flatten_cwdb(df, df_type)
             df = df.reset_index()
 
-        # if year of test_date is same as year of start_date then train_df RAW_DATE > test_date
-        if int(str(test_date)[:4]) == int(str(self.start_date)[:4]):
-            train_df = df[df.RAW_DATE > test_date]
-            test_df = df[df.RAW_DATE <= test_date]
-        else:
-            train_df = df[df.RAW_DATE < test_date]
-            test_df = df[df.RAW_DATE >= test_date]
+        train_df = df[df.RAW_DATE < test_date]
+        test_df = df[df.RAW_DATE >= test_date]
         if df_type == 'numeric':
             index_cols = ['RAW_DATE', 'RAW_TIME', 'RAW_FDAY']
         else:
@@ -343,8 +338,11 @@ class MakeNIERDataset(ABC):
             else:
                 self.final_data[data_type] = self._pca_fitting(df_list[data_type], data_type,
                                                                pca_latent_dims[data_type])
-        
-        save_data(self.final_data, self.preprocess_root, 'NIER_R5_data.pkl')
+        if self.remove_region is None:
+            save_path = 'all_region'
+        else:
+            save_path = '-'.join(self.remove_region)
+        save_data(self.final_data, self.preprocess_root, f"{save_path}.pkl")
 
     def _pca_fitting(self, main_df, df_type, pca_latent_dim_list=None):
         if pca_latent_dim_list is None:
@@ -360,9 +358,9 @@ class MakeNIERDataset(ABC):
 
         regions = list(main_df['train'].keys())
         ########### region tuning 시 바꿔야 할 부분 #############
-        # print(regions)
+
         for i, region in enumerate(regions):
-            if self.remove_region is not None and region in self.remove_region:
+            if region in self.remove_region:
                 print('remove region: ', region)
             else:
                 train_flat.append(main_df['train'][region])
@@ -438,8 +436,8 @@ class MakeNIERDataset(ABC):
             ########### region tuning 시 바꿔야 할 부분 #############
 
             for i, region in enumerate(regions):
-                if self.remove_region is not None and region in self.remove_region:
-                    print('remove region: ', region)
+                if region in self.remove_region:
+                    print('numeric - remove region: ', region)
                 else:
                     train_flat.append(self.wrf['train'][region])
                     test_flat.append(self.wrf['test'][region])
