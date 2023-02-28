@@ -2,48 +2,48 @@
 # @Created   : 2022/10/21 2:27 PM
 # @Author    : Junhyung Kwon
 # @Site      : 
-# @File      : dataloader_dev2.py
+# @File      : dataloader.py
 # @Software  : PyCharm
 
-import os
+from torch.utils.data import Dataset, DataLoader
+import torch
 
+import os
+import csv
 import numpy as np
 import pandas as pd
-import torch
-from imblearn.over_sampling import RandomOverSampler
-from torch.utils.data import Dataset, DataLoader
-
 from ..utils import load_data
+
+from imblearn.over_sampling import RandomOverSampler
 
 
 class NIERDataset(Dataset):
 
-    def __init__(self, predict_location_id, predict_pm, shuffle=False, sampling='normal', data_path='../../dataset/d5',
-                 data_type='train', pca_dim=None, lag=1, numeric_type='numeric', numeric_data_handling='single',
-                 horizon=4, max_lag=7, max_horizon=6, numeric_scenario=1, timepoint_day=4, interval=1, seed=999,
-                 serial_y=False, flatten=True, start_date=20170301, until_date=20220228, co2_load=False):
+    def __init__(self, predict_location_id, predict_pm, shuffle=False, sampling='original', data_path='../../dataset/d5',
+                 data_type='train', pca_dim=None, lag=1, numeric_type='numeric', csv_name='height_region_list.csv', numeric_data_handling='normal',
+                 horizon=4, max_lag=7, max_horizon=6, rm_region=0, numeric_scenario=1, timepoint_day=4, interval=1, seed=999,
+                 serial_y=False, flatten=True, start_date=20170301, until_date=20220228,):
         """
         NIER Dataset 생성을 위한 class
         :param predict_location_id: 예측하려는 지역 id (R4_59~R4_77)
         :param predict_pm: 예측값 종류 (PM10, PM25)
         :param shuffle: depricated (False로 고정)
-        :param sampling: oversampling or normal (default: 'normal')
+        :param sampling: oversampling or original (default: 'original')
         :param data_path: root data path
         :param data_type: train or test set
         :param pca_dim: PCA 차원 수
         :param lag: 예측에 사용할 lag 길이
         :param numeric_type: 예측장 정보 종류 (WRF, CMAQ, Numeric(WRF+CMAQ))
-        :param numeric_data_handling: mean 이면 하루 평균 값, single 이면 15시의 데이터 포인트, normal 이면 모든 포인트(하루 4포인트)
+        :param numeric_data_handling: mean 이면 하루 평균 값, single 이면 15시의 데이터 포인트
         :param horizon: 예측하려는 horizon
         :param max_lag: 최대 lag 길이 (3일 ~ 1일)
         :param max_horizon: 최대 horizon 길이 (6으로 고정)
-        :param numeric_scenario: 실험 시나리오 (0: 기존 세팅(예측하려는 날 당일의 WRF), 그 외: 1일부터 d일 까지의 WRF, CMAQ 정보 사용, 4: 1~3 + 당일)
+        :param numeric_scenario: 실험 시나리오 (0: 기존 세팅(예측하려는 날 당일의 WRF), 그 외: 1일부터 d일 까지의 WRF, CMAQ 정보 사용)
         :param timepoint_day: 하루에 수집되는 데이터 포인트 수 (default: 4)
         :param interval: 예측에 사용될 interval
         :param seed: random seed
         :param serial_y: sequential 예측 여부 (True면 horizon 레이블 값, False면 해당 horizon의 레이블 반환)
         """
-
         super(NIERDataset, self).__init__()
         if pca_dim is None:
             pca_dim = dict(
@@ -57,7 +57,7 @@ class NIERDataset(Dataset):
         assert numeric_scenario in [0, 1, 2, 3, 4], f'bad scenario: {numeric_scenario}'
         self.predict_location_id = predict_location_id
         self.predict_pm = predict_pm
-        self.sampling = sampling if data_type == 'train' else 'normal'
+        self.sampling = sampling if data_type == 'train' else 'original'
         self.data_path = data_path
         self.data_type = data_type
         self.pca_dim = pca_dim
@@ -66,6 +66,7 @@ class NIERDataset(Dataset):
         self.max_lag = max_lag  # 최대 lag 길이 (현재는 3, 논의 필요)
         self.max_horizon = max_horizon  # 최대 horizon 길이 (3~6 까지 예)
         self.numeric_type = numeric_type
+        self.csv_name = csv_name
         self.numeric_data_handling = numeric_data_handling
         self.numeric_scenario = numeric_scenario
         self.timepoint_day = timepoint_day
@@ -76,19 +77,52 @@ class NIERDataset(Dataset):
         self.flatten = flatten
         self.start_date = start_date
         self.until_date = until_date
-        self.co2_load = co2_load
+        self.rm_region = rm_region
 
         self.threshold_dict = dict(
             PM10=[30, 80, 150],
             PM25=[15, 35, 75]
         )
+        
+        if rm_region != 0:
+            self.rm_regions, self.rm_regions_pkl_name = self.get_rm_regions(predict_location_id, rm_region)
+        else:
+            self.rm_regions, self.rm_regions_pkl_name = None, 'NIER_R5_data'
 
         self.__read_data__()
 
+    def get_rm_regions(self, predict_location_id, rm_region):
+        with open(f'../NIER_R5_new/data_folder/{self.csv_name}', 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            rm_regions = None
+            for i, line in enumerate(reader):
+                if i > 0 and i < 9:
+                    line = list(line)
+                    region_num = line[0]
+                    if region_num == predict_location_id:
+                        # print(predict_location_id)
+                        # print(rm_region)
+                        if rm_region == 1:
+                            rm_regions = line[2].split(',')
+                        elif rm_region == 2:
+                            rm_regions = line[2].split(',')+line[3].split(',')
+                        elif rm_region == 3:
+                            rm_regions = line[2].split(',')+line[3].split(',')+line[4].split(',')
+                        rm_regions.sort()
+                
+            return rm_regions, "-".join(rm_regions)
+
     def __read_data__(self):
-        start_year = str(self.start_date)[2:4]
-        test_year = str(self.until_date)[2:4]
-        whole_data = load_data(os.path.join(self.data_path, f'NIER_R5_data_{start_year}_{test_year}.pkl'))
+         # start_year = str(self.start_date)[2:4]
+        # test_year = str(self.until_date)[2:4]
+        # whole_data = load_data(os.path.join(self.data_path, f'NIER_R5_data_{start_year}_{test_year}.pkl'))
+        if self.rm_region != 0:
+            # print(self.rm_regions, "are removed")s
+            whole_data = load_data(os.path.join(self.data_path, f'{self.rm_regions_pkl_name}.pkl'))
+        else:
+            # print("Using all regions")
+            whole_data = load_data(os.path.join(self.data_path, 'NIER_R5_data.pkl'))
+
 
         self.y_ = whole_data['obs'][self.predict_pm][f'{self.data_type}_y'][self.predict_location_id]
         self.mean, self.scale = whole_data['obs'][self.predict_pm]['mean'], whole_data['obs'][self.predict_pm]['scale']
@@ -98,11 +132,6 @@ class NIERDataset(Dataset):
         self.dec_X = whole_data[self.numeric_type]['X'][f"pca_{self.pca_dim[self.numeric_type]}"][
             self.data_type].reset_index()
         self.dec_X = self.dec_X.set_index(['RAW_DATE'])
-
-        if self.co2_load:
-            co2_data = load_data(os.path.join(self.data_path, f'co2_{start_year}_to_{test_year}.pkl'))
-            co2_X = co2_data[self.data_type][self.predict_location_id]
-            self.obs_X = pd.concat([self.obs_X, co2_X], axis=1)
 
         self.max_length = (len(self.obs_X) - 3 - 4 * (
                 self.max_lag + self.max_horizon)) // 4 + 1  # (len(self.obs_X) - 4 * ((self.max_lag - 1) + (self.max_horizon))) // 4
@@ -139,32 +168,29 @@ class NIERDataset(Dataset):
         dummy_X = np.random.randn(len(self.y_cls[idx_lists]), 2)
         _, _ = oversampler.fit_resample(dummy_X, self.y_cls[idx_lists])
         # print(self.original_y.shape, self.y_cls.shape, self.y_cls[idx_lists].shape)
+        # print formatting compare to oversampling count
+        
         self.idx_list = oversampler.sample_indices_
 
     def __getitem__(self, item):
-        horizon_day = torch.tensor([0.]).float()
         if torch.is_tensor(item):
             item = item.tolist()
         index = self.idx_list[item]
 
-        original_idx = self.original_idx_list[
-            index]  # index * self.timepoint_day + 3 + self.timepoint_day * self.max_lag
+        original_idx = self.original_idx_list[index] # index * self.timepoint_day + 3 + self.timepoint_day * self.max_lag
 
         obs_window = self.obs_X[original_idx - self.timepoint_day * self.lag:original_idx]
-        fnl_window = self.fnl_X[original_idx - self.timepoint_day * self.lag:original_idx - 2]
+        fnl_window = self.fnl_X[original_idx - self.timepoint_day * self.lag:original_idx-2]
 
         prediction_date = self.obs_X.index[original_idx - 1]
         num_window = self.dec_X.loc[prediction_date[0]]
         if self.numeric_scenario == 0:
             num_window = num_window[num_window.RAW_FDAY == self.horizon]
+        # numeric scenario 가 4일때 -> 1~3 + horizon 당일 예측치
         elif self.numeric_scenario == 4 and self.horizon > 3:
             horizon_day = num_window[num_window.RAW_FDAY == self.horizon]
             num_window = num_window[num_window.RAW_FDAY.between(1, 3)]
-            # point_window = pd.concat([num_window, horizon_day], axis=0)
-
-            horizon_day = horizon_day[horizon_day.RAW_TIME == '15'].drop(['RAW_TIME', 'RAW_FDAY'], axis=1)
-            # print(type(horizon_day), horizon_day.shape)
-            horizon_day = torch.from_numpy(horizon_day.to_numpy()).squeeze().float()
+            num_window = pd.concat([num_window, horizon_day], axis=0)
         else:
             num_window = num_window[num_window.RAW_FDAY.between(1, self.numeric_scenario)]
 
@@ -204,22 +230,19 @@ class NIERDataset(Dataset):
         fnl_window = torch.from_numpy(fnl_window.to_numpy()).float()
         num_window = torch.from_numpy(num_window.to_numpy()).float()
 
-        # else:
-        #     horizon_day = torch.tensor([0])
-
         # if len(num_window.shape) > 1 and self.flatten:
         #     num_window = torch.flatten(num_window)
 
         # print(y_window, y_original, y_cls)
 
-        return obs_window, fnl_window, num_window, y_window, y_original, y_cls, horizon_day
+        return obs_window, fnl_window, num_window, y_window, y_original, y_cls
 
 
 def get_dataloader(dataset_args, batch_size=64, train_shuffle=True, test_shuffle=False, num_workers=1):
     trainset = NIERDataset(**dataset_args)
     train_loader = DataLoader(dataset=trainset, batch_size=batch_size, shuffle=train_shuffle, num_workers=num_workers)
     dataset_args['data_type'] = 'test'
-    dataset_args['sampling'] = 'normal'
+    dataset_args['sampling'] = 'original'
     testset = NIERDataset(**dataset_args)
     test_loader = DataLoader(dataset=testset, batch_size=batch_size, shuffle=test_shuffle, num_workers=num_workers)
 
