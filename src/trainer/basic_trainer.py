@@ -3,7 +3,7 @@
 # @Created   : 2022/10/26 1:45 PM
 # @Author    : Junhyung Kwon
 # @Site      : 
-# @File      : basic_trainer.py
+# @File      : basic_trainer_dev2.py
 # @Software  : PyCharm
 
 from abc import ABC, abstractmethod
@@ -23,13 +23,13 @@ import numpy as np
 
 from ..utils import AverageMeter, easycat, set_random_seed, concatenate
 from ..models import DoubleInceptionModel, SingleInceptionModel, SingleInceptionCRNN, DoubleInceptionCRNN, \
-                    DoubleInceptionModel_v2, SingleInceptionModel_v2, SingleInceptionCRNN_v2, DoubleInceptionCRNN_v2, Transformer, BERT
+    DoubleInceptionModel_v2, SingleInceptionModel_v2, SingleInceptionCRNN_v2, DoubleInceptionCRNN_v2, Transformer, BERT
 
 
 class BasicTrainer(ABC):
     """Trainer base class for cross validation of NIER models."""
 
-    def __init__(self, pm_type: str, model_name: str = 'CNN', model_type: str = "single", model_ver: str ='v2',
+    def __init__(self, pm_type: str, model_name: str = 'CNN', model_type: str = "single", model_ver: str = 'v2',
                  scheduler: str = "MultiStepLR", lr_milestones=None, optimizer_name: str = "SGD",
                  objective_name: str = "CrossEntropyLoss", n_epochs: int = 1, dropout: float = 0.,
                  device: str = "cpu", batch_first: bool = True, name: str = "NIER_R5",
@@ -70,7 +70,7 @@ class BasicTrainer(ABC):
     def _reset_history(self):
         self.history = dict(
             kfold_results=[],
-#             model_list=[],
+            #             model_list=[],
             best_model_list=[],
             best_fold_idx=0,
         )
@@ -86,14 +86,17 @@ class BasicTrainer(ABC):
 
         accuracy = np.trace(cfs_matrix) / np.sum(cfs_matrix)
 
-        pod = 0. if np.sum(cfs_matrix[2:, 2:]) == 0 else np.sum(cfs_matrix[2:, 2:]) / (np.sum(cfs_matrix[2:, :2]) + 
-        np.sum(cfs_matrix[2:, 2:]))
+        pod = 0. if np.sum(cfs_matrix[2:, 2:]) == 0 else np.sum(cfs_matrix[2:, 2:]) / (np.sum(cfs_matrix[2:, :2]) +
+                                                                                       np.sum(cfs_matrix[2:, 2:]))
         far = 1. if np.sum(cfs_matrix[:2, 2:]) + np.sum(cfs_matrix[2:, 2:]) == 0 else np.sum(cfs_matrix[:2, 2:]) / \
-                                                                                      (np.sum(cfs_matrix[:2, 2:]) + np.sum(cfs_matrix[2:, 2:]))
+                                                                                      (np.sum(
+                                                                                          cfs_matrix[:2, 2:]) + np.sum(
+                                                                                          cfs_matrix[2:, 2:]))
         f1 = 0. if (pod + (1 - far)) == 0 else (2 * pod * (1 - far)) / (pod + (1 - far))
         hit = 0. if np.sum(cfs_matrix[2]) + np.sum(cfs_matrix[3]) == 0 else (cfs_matrix[2, 2] + cfs_matrix[3, 3]) / \
-                                                                            (np.sum(cfs_matrix[2]) + np.sum(cfs_matrix[3]))
-        
+                                                                            (np.sum(cfs_matrix[2]) + np.sum(
+                                                                                cfs_matrix[3]))
+
         return dict(
             accuracy=accuracy,
             hit=hit,
@@ -183,7 +186,7 @@ class BasicTrainer(ABC):
                 best_model_weights = model_weights
 
             self.history['kfold_results'].append(return_dict)
-#             self.history['model_list'].append(model_weights)
+            #             self.history['model_list'].append(model_weights)
             self.history['best_model_list'].append(best_model_weights)
 
         best_f1_list = [result['best_f1'] for result in self.history['kfold_results']]
@@ -202,6 +205,11 @@ class BasicTrainer(ABC):
         self.horizon = param_args['horizon']
         self.sampling = param_args['sampling']
         self.region = param_args['region']
+
+        if train_set.numeric_scenario == 4 and train_set.horizon > 3 and self.model_ver == 'v2':
+            is_point_added = True
+        else:
+            is_point_added = False
 
         setting = f"{self.region} | Device:{self.device} | Horizon:{self.horizon} | {self.model_name} | is_Reg:{self.is_reg} | Lag:{self.lag} | " \
                   f"{self.model_type} | {self.sampling} "
@@ -229,19 +237,22 @@ class BasicTrainer(ABC):
         else:
             if self.model_name == 'CNN':
                 if self.model_type == 'single':
-                    net = SingleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, **model_args)
+                    net = SingleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added, **model_args)
                 elif self.model_type == 'double':
-                    net = DoubleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, **model_args)
+                    net = DoubleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added, **model_args)
                 else:
-                    net = DoubleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, **model_args)
+                    net = DoubleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added, **model_args)
 
-            if self.model_name == 'RNN':
-                if self.model_type == 'single':
-                    net = SingleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU', **model_args)
-                elif self.model_type == 'double':
-                    net = DoubleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU', **model_args)
-                else:
-                    net = DoubleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU', **model_args)
+        if self.model_name == 'RNN':
+            if self.model_type == 'single':
+                net = SingleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
+                                             added_point=is_point_added, **model_args)
+            elif self.model_type == 'double':
+                net = DoubleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
+                                             added_point=is_point_added, **model_args)
+            else:
+                net = DoubleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
+                                             added_point=is_point_added, **model_args)
 
         train_loader = DataLoader(train_set, batch_size=batch_size)
         val_loader = DataLoader(valid_set, batch_size=batch_size)
@@ -367,16 +378,22 @@ class BasicTrainer(ABC):
             x_fnl = batch[1].to(self.device).float()
             x_fnl = x_fnl.permute(0, 2, 1).contiguous()
             x_num = batch[2].to(self.device).float()
+            point_num = None
+            if batch[-1].shape[-1] != 1 and self.model_ver == 'v2':
+                point_num = batch[-1].to(self.device).float()
+
+            # print('debug', x_obs.shape, x_fnl.shape, x_num.shape, point_num.shape)
 
             if self.is_reg:
                 y = batch[3].to(self.device).float()
                 orig_y = batch[4].to(self.device).float()
             else:
                 y = batch[5].to(self.device).long()
-            x_pred = net(x_obs, x_fnl, x_num)
+
+            x_pred = net(x_obs, x_fnl, x_num, point_num)
 
             if self.is_reg:
-                x_pred =  x_pred.squeeze(-1) if x_pred.shape[0] == 1 else x_pred.squeeze()
+                x_pred = x_pred.squeeze(-1) if x_pred.shape[0] == 1 else x_pred.squeeze()
                 original_pred_list = x_pred.detach().cpu().numpy()
                 y_list = concatenate(y_list, orig_y.detach().cpu().numpy())
                 pred_list = concatenate(pred_list, x_pred.detach().cpu().numpy() * scale + mean)
@@ -410,7 +427,8 @@ class BasicTrainer(ABC):
         net.eval()
 
         with torch.no_grad():
-            test_orig_pred, test_pred, test_label, test_loss = self._run_epoch(test_loader, net, scale, mean, is_train=False)
+            test_orig_pred, test_pred, test_label, test_loss = self._run_epoch(test_loader, net, scale, mean,
+                                                                               is_train=False)
 
         if self.is_reg:
             test_pred_score = self._thresholding(test_pred, threshold)

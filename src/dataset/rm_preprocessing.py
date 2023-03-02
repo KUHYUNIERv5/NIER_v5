@@ -18,14 +18,16 @@ from ..utils import region_flatten_cwdb, db_to_pkl, check_array, load_data, save
 
 from abc import ABC
 
+#!!!!!!!!!!!!!!!!!!!!!!!!!!! CMAQ 부분이 변경됨 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# 참고: best model 선정을 위해 CMAQ 수치 값을 함께 리턴하도록 변경됨
 
-class RMMakeNIERDataset(ABC):
-    def __init__(self, reset_db=False, start_date=20170301, until_date=20220228, test_date=20210301, remove_region=None, seed=999,
-                 preprocess_root='../dataset/d5', save_processed_data=True, run_pca=False):
-        super(RMMakeNIERDataset, self).__init__()
-        
+class MakeNIERDataset(ABC):
+    def __init__(self, reset_db=False, start_date=20170301, until_date=20220228, test_date=20210301, seed=999,
+                 preprocess_root='../dataset/d5', root_dir="/workspace/local/src/datagen/ver_4th/db_save", save_processed_data=True, run_pca=False, remove_region=None):
+        super(MakeNIERDataset, self).__init__()
         self.reset_db = reset_db
         self.preprocess_root = preprocess_root
+        self.root_dir = root_dir
         self.start_date = start_date
         self.until_date = until_date
         self.save_processed_data = save_processed_data
@@ -37,8 +39,10 @@ class RMMakeNIERDataset(ABC):
         if run_pca:
             self.handle_pca()
         else:
+            start_year = str(self.start_date)[2:4]
+            test_year = str(self.until_date)[2:4]
             if remove_region is None:
-                save_path = 'all_region'
+                save_path = 'all_region' ########### 변경
             else:
                 save_path = '-'.join(remove_region)
             self.final_data = load_data(os.path.join(self.preprocess_root, f"{save_path}.pkl"))
@@ -54,8 +58,8 @@ class RMMakeNIERDataset(ABC):
             cw_train, cw_test, cw_scaler = self._preprocess_df(cwdb_df, 'cwdb', test_date=self.test_date)
             ewkr_train, ewkr_test, ewkr_scaler = self._preprocess_df(ewkr_df, 'ewkr', test_date=self.test_date)
             fnl_train, fnl_test, fnl_scaler = self._preprocess_df(fnl_df, 'fnl', test_date=self.test_date)
-            wrf_train, wrf_test, wrf_scaler = self._preprocess_df(wrf_df, 'numeric', test_date=self.test_date)
-            cmaq_train, cmaq_test, cmaq_scaler = self._preprocess_df(cmaq_df, 'numeric', test_date=self.test_date)
+            wrf_train, wrf_test, wrf_scaler = self._preprocess_df(wrf_df, 'wrf', test_date=self.test_date)
+            cmaq_train, cmaq_test, cmaq_train_pm, cmaq_test_pm, cmaq_scaler = self._preprocess_df(cmaq_df, 'cmaq', test_date=self.test_date)
 
             obs = dict(
                 train=obs_train,
@@ -85,13 +89,14 @@ class RMMakeNIERDataset(ABC):
             cmaq = dict(
                 train=cmaq_train,
                 test=cmaq_test,
+                train_pm=cmaq_train_pm,
+                test_pm=cmaq_test_pm,
                 scaler=cmaq_scaler
             )
 
-            # self._save_preprocessed_v1(obs, cw, ewkr, fnl, wrf, cmaq)
+            self._save_preprocessed_v1(obs, cw, ewkr, fnl, wrf, cmaq)
         else:
             obs, cw, ewkr, fnl, wrf, cmaq = self._load_preprocessed_v1()
-            # pass
 
         self.obs = obs
         self.cw = cw
@@ -117,12 +122,12 @@ class RMMakeNIERDataset(ABC):
         start_year = str(self.start_date)[2:4]
         test_year = str(self.until_date)[2:4]
 
-        save_data(obs, self.preprocess_root, filename=f'um_obs_R4_{start_year}_to_{test_year}_221018.pkl')
-        save_data(cw, self.preprocess_root, filename=f'um_cw_R4_{start_year}_to_{test_year}_221018.pkl')
-        save_data(ewkr, self.preprocess_root, filename=f'um_ewkr_R4_{start_year}_to_{test_year}_221018.pkl')
-        save_data(fnl, self.preprocess_root, filename=f'um_fnl_R4_{start_year}_to_{test_year}_221018.pkl')
-        save_data(wrf, self.preprocess_root, filename=f'um_wrf_R4_{start_year}_to_{test_year}_221018.pkl')
-        save_data(cmaq, self.preprocess_root, filename=f'um_cmaq_R4_{start_year}_to_{test_year}_221018.pkl')
+        save_data(obs, self.preprocess_root, filename=f'um_obs_R4_{start_year}_to_{test_year}_230127.pkl')
+        save_data(cw, self.preprocess_root, filename=f'um_cw_R4_{start_year}_to_{test_year}_230127.pkl')
+        save_data(ewkr, self.preprocess_root, filename=f'um_ewkr_R4_{start_year}_to_{test_year}_230127.pkl')
+        save_data(fnl, self.preprocess_root, filename=f'um_fnl_R4_{start_year}_to_{test_year}_230127.pkl')
+        save_data(wrf, self.preprocess_root, filename=f'um_wrf_R4_{start_year}_to_{test_year}_230127.pkl')
+        save_data(cmaq, self.preprocess_root, filename=f'um_cmaq_R4_{start_year}_to_{test_year}_230127.pkl')
 
     def _check_data(self, obs_df, fnl_df, wrf_df, cmaq_df):
         s_date = str(self.start_date)[0:4] + '-' + str(self.start_date)[4:6] + '-' + str(self.start_date)[6:8]
@@ -204,7 +209,7 @@ class RMMakeNIERDataset(ABC):
 
     def _select_by_date(self):
         obs_df, fnl_df, wrf_df, cmaq_df, cwdb_df, ewkr_df = db_to_pkl(get_data=self.reset_db,
-                                                                      root_dir=self.preprocess_root)
+                                                                      root_dir=self.root_dir )
 
         ############## 날짜 튜닝 시 작업해야할 부분 ######################
 
@@ -237,14 +242,19 @@ class RMMakeNIERDataset(ABC):
         return obs_df, fnl_df, wrf_df, cmaq_df, cwdb_df, ewkr_df
 
     def _preprocess_df(self, df, df_type, test_date=20210301):
-        assert df_type in ['obs', 'fnl', 'numeric', 'cwdb', 'ewkr'], 'data_type: invalid parameter %s' % df_type
+        assert df_type in ['obs', 'fnl', 'wrf', 'cmaq', 'cwdb', 'ewkr'], 'data_type: invalid parameter %s' % df_type
         if df_type == 'cwdb':
             df = region_flatten_cwdb(df, df_type)
             df = df.reset_index()
 
-        train_df = df[df.RAW_DATE < test_date]
-        test_df = df[df.RAW_DATE >= test_date]
-        if df_type == 'numeric':
+        # if year of test_date is same as year of start_date then train_df RAW_DATE > test_date
+        if int(str(test_date)[:4]) == int(str(self.start_date)[:4]):
+            train_df = df[df.RAW_DATE > test_date]
+            test_df = df[df.RAW_DATE <= test_date]
+        else:
+            train_df = df[df.RAW_DATE < test_date]
+            test_df = df[df.RAW_DATE >= test_date]
+        if df_type == 'cmaq' or df_type == 'wrf':
             index_cols = ['RAW_DATE', 'RAW_TIME', 'RAW_FDAY']
         else:
             index_cols = ['RAW_DATE', 'RAW_TIME']
@@ -285,6 +295,12 @@ class RMMakeNIERDataset(ABC):
         train_flat_df = []
         test_flat_df = []
 
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!! CMAQ 부분이 변경됨 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        # if df_type == 'cmaq':
+        #     train_pm = {}
+        #     test_pm = {}
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!! CMAQ 부분이 변경됨 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
         for i, region in enumerate(regions):
             region_id = int(region.split("_")[1])
             train_d = train_df.loc[train_df.REGION_CODE == region]
@@ -301,9 +317,13 @@ class RMMakeNIERDataset(ABC):
                 train_flat_df.append(train_d)
                 test_flat_df.append(test_d)
             else:
-
                 train_region_dict[region] = train_d
                 test_region_dict[region] = test_d
+            # !!!!!!!!!!!!!!!!!!!!!!!!!!! CMAQ 부분이 변경됨 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            # if df_type == 'cmaq':
+            #     train_pm['region'] = train_d[['F_PM10', 'F_PM2_5']]
+            #     test_pm['region'] = test_d[['F_PM10', 'F_PM2_5']]
+            # !!!!!!!!!!!!!!!!!!!!!!!!!!! CMAQ 부분이 변경됨 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
         # Concatenate chinese regions (< R4_59)
         if len(train_flat_df) > 0:
@@ -314,6 +334,12 @@ class RMMakeNIERDataset(ABC):
             test_region_dict['chinese_region'] = chinese_region_test
 
         return train_region_dict, test_region_dict, scaler
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!! CMAQ 부분이 변경됨 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        # if df_type != 'cmaq':
+        #     return train_region_dict, test_region_dict, scaler
+        # else:
+        #     return train_region_dict, test_region_dict, train_pm, test_pm, scaler
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!! CMAQ 부분이 변경됨 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     def handle_pca(self):
         dataset_list = ['obs', 'fnl', 'wrf', 'cmaq', 'numeric']
@@ -339,7 +365,7 @@ class RMMakeNIERDataset(ABC):
                 self.final_data[data_type] = self._pca_fitting(df_list[data_type], data_type,
                                                                pca_latent_dims[data_type])
         if self.remove_region is None:
-            save_path = 'all_region'
+            save_name = 'all_region'
         else:
             save_path = '-'.join(self.remove_region)
         save_data(self.final_data, self.preprocess_root, f"{save_path}.pkl")
@@ -365,6 +391,12 @@ class RMMakeNIERDataset(ABC):
             else:
                 train_flat.append(main_df['train'][region])
                 test_flat.append(main_df['test'][region])
+
+            # !!!!!!!!!!!!!!!!!!!!!!!!!!! CMAQ 부분이 변경됨 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#             if df_type == 'cmaq' or df_type == 'numeric':
+#                 cmaq_train_pm = []
+#                 cmaq_test_pm = []
+            # !!!!!!!!!!!!!!!!!!!!!!!!!!! CMAQ 부분이 변경됨 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
         #####################################################
 
@@ -441,6 +473,8 @@ class RMMakeNIERDataset(ABC):
                 else:
                     train_flat.append(self.wrf['train'][region])
                     test_flat.append(self.wrf['test'][region])
+
+
 
             #####################################################
 

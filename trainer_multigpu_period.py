@@ -1,4 +1,5 @@
 import torch.multiprocessing as mp
+import os
 
 import torch
 from itertools import product
@@ -11,6 +12,7 @@ from src.dataset import NIERDataset
 from src.utils import save_data
 import argparse
 from tqdm.auto import tqdm
+import gc
 
 import warnings
 warnings.filterwarnings(action='ignore')
@@ -22,12 +24,13 @@ parser.add_argument('--pm_type', help='input pm type', default='PM10')
 parser.add_argument('--reg', action='store_true', help='input clsreg type')
 parser.add_argument('--epoch', type=int, default=50, help='input epoch')
 parser.add_argument('--num_scen', type=int, default=0, help='input numeric scenario')
+parser.add_argument('--exp_type', default='period', help='period or rm_region')
 parser.add_argument('--exp_name', default='17_to_21', help='experiment name')
 parser.add_argument('--model_ver', default='v1', help='model version')
 # parser.add_argument('--lr', required=True, type=float, default=0.0002, help='input running device')
 
 ### Change or add arguments here
-parser.add_argument('--root_dir', default='./results_period/', help='save directory')
+parser.add_argument('--root_dir', default='./results/', help='save directory')
 
 parser.add_argument('--data_dir', type=str, default='./', help="dataset directory")
 parser.add_argument('--rm_region', type=int, default=0, help="remove region")
@@ -41,29 +44,38 @@ predict_location_id = args.region
 pm_types = ["PM10", "PM25"]
 
 
-exp_name = args.exp_name
-date_dict = {
-    "17_to_21": [20170101, 20211231],
-    "18_to_21": [20180101, 20211231],
-    "19_to_21": [20190101, 20211231],
-    "20_to_21": [20200101, 20211231],
-    "17_to_19": [20170101, 20191231],
-    "19_to_21_test_ver" : [20200101, 20211231]
-}
+exp_type = args.exp_type
+if exp_type == 'period':
 
-start_date, until_date = date_dict[exp_name][0], date_dict[exp_name][1]
+    exp_name = args.exp_name
+    date_dict = {
+        "17_to_21": [20170101, 20211231],
+        "18_to_21": [20180101, 20211231],
+        "19_to_21": [20190101, 20211231],
+        "20_to_21": [20200101, 20211231],
+        "17_to_19": [20170101, 20191231],
+        "19_to_21_test_ver" : [20200101, 20211231]
+    }
 
+    start_date, until_date = date_dict[exp_name][0], date_dict[exp_name][1]
+    
+elif exp_type == 'rm_region':
+    exp_name = arg.exp_name # exp_name : region_PMType_rmgroup  (e.g. 62_PM10_1)
+    start_date, until_date = 20190101, 20211231
+
+data_dir = os.path.join(args.data_dir, exp_type, exp_name)
+
+rm_region = args.rm_region
 is_reg = False
-n_epochs = 50
+n_epochs = args.epoch
 numeric_scenario = 0
 model_ver = "v1"
-root_dir = args.root_dir + f"{exp_name}/"
+save_path = os.path.join(args.root_dir, exp_type, exp_name)
 gpu_idx_list = args.gpu_list
-rm_region = 0
+csv_name = args.csv_name
 
 
 # Dataset_args
-data_dir = f"/home/pink/dust/DustPrediction/dataset_period/{exp_name}/"
 lag = [1,2,3,4,5,6,7]
 pca_dim = dict(
         obs=256,
@@ -100,16 +112,14 @@ elif numeric_scenario == 3:
 else:
     num_setting = 'r6'
 
-# set save root dir
-# root_dir = f'/workspace/results/{experiment}_{num_setting}/{predict_location_id}/{pm_type}/{run_type}/'
-
 def multi_GPU(params):
     gpu_idx = semaphore.pop()
     device = 'cuda:%d' % gpu_idx if torch.cuda.is_available() else 'cpu'
-    print('Process using :', device)
+    
     score_dict = dict()
     model_dict = dict()
     for idx, input_param in enumerate(tqdm(params['param_grid'])):
+        
         dataset_args = input_param[0]
         trainer_dict = input_param[1]
         if trainer_dict['is_reg']:
@@ -142,8 +152,6 @@ def multi_GPU(params):
         )
 
         trainset = NIERDataset(**dataset_args)
-        print(dataset_args['sampling'])
-        print('trainset length :', len(trainset))
         dataset_args['data_type'] = 'test'
         validset = NIERDataset(**dataset_args)
 
@@ -211,7 +219,6 @@ def multi_GPU(params):
             run_info = run_info,
             best_model = best_model,
         )
-        print('Process end :', device)
 
         semaphore.append(gpu_idx)
 
@@ -232,6 +239,7 @@ for pm_type in tqdm(pm_types):
             pca_dim=[pca_dim],
             lag=lag,  # 예측에 사용할 lag 길이
             numeric_type=['numeric'],
+            csv_name=[csv_name],
             horizon=[horizon],  # 예측하려는 horizon
             timepoint_day=[4],  # 하루에 수집되는 데이터 포인트 수 (default: 4) fixed
             interval=[1],  # 예측에 사용될 interval fixed
@@ -271,8 +279,8 @@ for pm_type in tqdm(pm_types):
         trainer_params = ParameterGrid(OrderedDict(trainer_dict))
         input_params = list(product(dataset_params, trainer_params))
         param_list.append({'param_grid': input_params})
-
     if __name__ == "__main__":
+        
         manager = mp.Manager()
         semaphore = manager.list(gpu_idx_list)
         return_score_dict = manager.dict()
@@ -282,8 +290,8 @@ for pm_type in tqdm(pm_types):
         pool.close()
         pool.join()
         
-        experiment = predict_location_id + '_' + pm_type + '_' + exp_name
-        save_dir = f'{root_dir}{experiment}'
+        experiment = predict_location_id + '_' + pm_type
+        save_dir = os.path.join(save_path, experiment)
         print(f"save data : {save_dir}")
         save_data(return_score_dict.values(), save_dir+'/scores', f'{num_setting}_{predict_location_id}_{pm_type}_{run_type}_{model_name}_score_result.pkl')
         save_data(return_model_dict.values(), save_dir+'/models', f'{num_setting}_{predict_location_id}_{pm_type}_{run_type}_{model_name}_grid_models.pkl')
