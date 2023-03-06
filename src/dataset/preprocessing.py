@@ -23,7 +23,7 @@ from abc import ABC
 
 class MakeNIERDataset(ABC):
     def __init__(self, reset_db=False, start_date=20170301, until_date=20220228, test_date=20210301, seed=999,
-                 preprocess_root='../dataset/d5', root_dir="/workspace/local/src/datagen/ver_4th/db_save", save_processed_data=True, run_pca=False, remove_region=None):
+                 preprocess_root='../dataset/d5', root_dir="/workspace/local/src/datagen/ver_4th/db_save", save_processed_data=True, run_pca=True, predict_region='R4_62', remove_region=0, rmgroup_file='../NIER_v5/data_folder/height_region_list.csv'):
         super(MakeNIERDataset, self).__init__()
         self.reset_db = reset_db
         self.preprocess_root = preprocess_root
@@ -34,21 +34,37 @@ class MakeNIERDataset(ABC):
         self.remove_region = remove_region
         self.seed = seed
         self.test_date = test_date
+        self.start_year = str(self.start_date)[2:4]
+        self.test_year = str(self.until_date)[2:4]
+        
+        self.predict_region = predict_region
+        self.rm_regions = self.build_rm_region(rmgroup_file, remove_region, predict_region) # list of region to remove
         self.preprocess()
 
         if run_pca:
             self.handle_pca()
         else:
-            start_year = str(self.start_date)[2:4]
-            test_year = str(self.until_date)[2:4]
-            if remove_region is None:
-                save_path = 'all_region' ########### 변경
-            else:
-                save_path = '-'.join(remove_region)
-            self.final_data = load_data(os.path.join(self.preprocess_root, f"{save_path}.pkl"))
-            # 지역_[].pkl
-            # R4_77_R4_69.pkl
-            # all_region.pkl
+            print("PCA is not applied")
+            pass
+
+    def build_rm_region(self, rmgroup_file, remove_region, predict_region):
+        """region 별 remove_region num에 대한 region list를 만드는 함수
+
+        Args:
+            rmgroup_file (str): rmgroup_file path
+            remove_region (int): number of region group to remove
+        """
+        df = pd.read_csv(rmgroup_file)
+        regions = df[df.Region == predict_region].iloc[:,2:2+remove_region].values.squeeze(0).tolist()
+        rm_region_list = []
+        for x in regions:
+            rm_region_list.extend(x.split(","))
+                
+        rm_region_list = list(set(rm_region_list))
+        print("rm_region_list: ", rm_region_list)
+            
+        return rm_region_list
+
 
     def preprocess(self):
         if self.save_processed_data:
@@ -59,7 +75,7 @@ class MakeNIERDataset(ABC):
             ewkr_train, ewkr_test, ewkr_scaler = self._preprocess_df(ewkr_df, 'ewkr', test_date=self.test_date)
             fnl_train, fnl_test, fnl_scaler = self._preprocess_df(fnl_df, 'fnl', test_date=self.test_date)
             wrf_train, wrf_test, wrf_scaler = self._preprocess_df(wrf_df, 'wrf', test_date=self.test_date)
-            cmaq_train, cmaq_test, cmaq_train_pm, cmaq_test_pm, cmaq_scaler = self._preprocess_df(cmaq_df, 'cmaq', test_date=self.test_date)
+            cmaq_train, cmaq_test, cmaq_scaler = self._preprocess_df(cmaq_df, 'cmaq', test_date=self.test_date)
 
             obs = dict(
                 train=obs_train,
@@ -89,8 +105,8 @@ class MakeNIERDataset(ABC):
             cmaq = dict(
                 train=cmaq_train,
                 test=cmaq_test,
-                train_pm=cmaq_train_pm,
-                test_pm=cmaq_test_pm,
+                # train_pm=cmaq_train_pm,
+                # test_pm=cmaq_test_pm,
                 scaler=cmaq_scaler
             )
 
@@ -364,10 +380,15 @@ class MakeNIERDataset(ABC):
             else:
                 self.final_data[data_type] = self._pca_fitting(df_list[data_type], data_type,
                                                                pca_latent_dims[data_type])
-        if self.remove_region is None:
-            save_name = 'all_region'
-        else:
-            save_path = '-'.join(self.remove_region)
+                
+        ####################
+
+        # 수정 => 지역명 폴더 생성이 안되서 에러났었음.
+        if not os.path.exists(os.path.join(self.preprocess_root, self.predict_region)):
+            os.makedirs(os.path.join(self.preprocess_root, self.predict_region))
+
+        # 수정 => .pkl이 두번 생겨서 save_path에 .pkl 1개 지움.
+        save_path = os.path.join(self.predict_region, f'{self.predict_region}_{self.start_date}_{self.until_date}_rmgroup_{self.remove_region}')
         save_data(self.final_data, self.preprocess_root, f"{save_path}.pkl")
 
     def _pca_fitting(self, main_df, df_type, pca_latent_dim_list=None):
@@ -386,7 +407,7 @@ class MakeNIERDataset(ABC):
         ########### region tuning 시 바꿔야 할 부분 #############
 
         for i, region in enumerate(regions):
-            if region in self.remove_region:
+            if region in self.rm_regions:
                 print('remove region: ', region)
             else:
                 train_flat.append(main_df['train'][region])
@@ -468,13 +489,11 @@ class MakeNIERDataset(ABC):
             ########### region tuning 시 바꿔야 할 부분 #############
 
             for i, region in enumerate(regions):
-                if region in self.remove_region:
+                if region in self.rm_regions:
                     print('numeric - remove region: ', region)
                 else:
                     train_flat.append(self.wrf['train'][region])
                     test_flat.append(self.wrf['test'][region])
-
-
 
             #####################################################
 

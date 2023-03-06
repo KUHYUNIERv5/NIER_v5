@@ -24,16 +24,16 @@ parser.add_argument('--pm_type', help='input pm type', default='PM10')
 parser.add_argument('--reg', action='store_true', help='input clsreg type')
 parser.add_argument('--epoch', type=int, default=50, help='input epoch')
 parser.add_argument('--num_scen', type=int, default=0, help='input numeric scenario')
-parser.add_argument('--exp_type', default='period', help='period or rm_region')
-parser.add_argument('--exp_name', default='17_to_21', help='experiment name')
 parser.add_argument('--model_ver', default='v1', help='model version')
-# parser.add_argument('--lr', required=True, type=float, default=0.0002, help='input running device')
+# parser.add_argument('--lr', required=True, type=float, default=0.0001, help='input running device')
 
 ### Change or add arguments here
-parser.add_argument('--root_dir', default='./results/', help='save directory')
+parser.add_argument('--root_dir', default='./NIER_v5/results/', help='save directory')
+parser.add_argument('--data_path', type=str, default='./NIER_v5/data_folder/', help="dataset directory")
 
-parser.add_argument('--data_dir', type=str, default='./', help="dataset directory")
-parser.add_argument('--rm_region', type=int, default=0, help="remove region")
+parser.add_argument('--period', default ='19_to_21', help='period name') # 17_to_21, 18_to_21, 19_to_21, 20_to_21, 17_to_19, 19_to_21_test_ver
+parser.add_argument('--rm_region', type=int, default=0, help="remove region num : 0, 1, 2, 3")
+parser.add_argument('--rm_group_file', type=str, default="./NIER_v5/data_folder/height_region_list.csv")
 
 parser.add_argument('--gpu_list', nargs='+', type=int, default=[4,5])
 
@@ -43,40 +43,37 @@ args = parser.parse_args()
 predict_location_id = args.region
 pm_types = ["PM10", "PM25"]
 
+date_dict = {
+    "17_to_21": [20170101, 20211231],
+    "18_to_21": [20180101, 20211231],
+    "19_to_21": [20190101, 20211231],
+    "20_to_21": [20200101, 20211231],
+    "17_to_19": [20170101, 20191231],
+    "19_to_21_test_ver" : [20200101, 20211231]
+}
 
-exp_type = args.exp_type
-if exp_type == 'period':
-
-    exp_name = args.exp_name
-    date_dict = {
-        "17_to_21": [20170101, 20211231],
-        "18_to_21": [20180101, 20211231],
-        "19_to_21": [20190101, 20211231],
-        "20_to_21": [20200101, 20211231],
-        "17_to_19": [20170101, 20191231],
-        "19_to_21_test_ver" : [20200101, 20211231]
-    }
-
-    start_date, until_date = date_dict[exp_name][0], date_dict[exp_name][1]
+start_date, until_date = date_dict[args.period][0], date_dict[args.period][1]
     
-elif exp_type == 'rm_region':
-    exp_name = arg.exp_name # exp_name : region_PMType_rmgroup  (e.g. 62_PM10_1)
-    start_date, until_date = 20190101, 20211231
+exp_name = args.region + "_" + str(start_date) + '_' + str(until_date) + '_rmgroup_' + str(args.rm_region) # ex) R4_62_20190101_20211231_rmgroup_1
 
-data_dir = os.path.join(args.data_dir, exp_type, exp_name)
+print("exp_name : ", exp_name)
+
+data_path = os.path.join(args.data_path, args.region)
 
 rm_region = args.rm_region
 is_reg = False
 n_epochs = args.epoch
 numeric_scenario = 0
-model_ver = "v1"
-save_path = os.path.join(args.root_dir, exp_type, exp_name)
+model_ver = args.model_ver
+save_path = os.path.join(args.root_dir, args.region, exp_name)
 gpu_idx_list = args.gpu_list
-csv_name = args.csv_name
+csv_name = args.rm_group_file
 
 
 # Dataset_args
-lag = [1,2,3,4,5,6,7]
+# lag = [1,2,3,4,5,6,7]
+lag = [3]
+device='cuda:0'
 pca_dim = dict(
         obs=256,
         fnl=512,
@@ -84,15 +81,16 @@ pca_dim = dict(
         cmaq=512,
         numeric=512
     )
-samplings = ['original','oversampling']
+# samplings = ['original','oversampling']
+samplings = ['original']
 numeric_data_handling = 'normal'
 
 # Trainer_dict
-device = "cuda:0"
 dropout = 0.1
 # model_names = ['RNN','CNN']
 model_name = 'RNN'
-model_types = ['single', 'double']
+model_types = ['single']
+# model_types = ['single', 'double']
 log_flag=False
 
 # save dir
@@ -234,12 +232,12 @@ for pm_type in tqdm(pm_types):
             predict_location_id=[predict_location_id],
             predict_pm=[pm_type],
             shuffle=[False],
-            data_path=[data_dir],
+            data_path=[data_path],
             data_type=['train'],
             pca_dim=[pca_dim],
             lag=lag,  # 예측에 사용할 lag 길이
             numeric_type=['numeric'],
-            csv_name=[csv_name],
+            exp_name=[exp_name],
             horizon=[horizon],  # 예측하려는 horizon
             timepoint_day=[4],  # 하루에 수집되는 데이터 포인트 수 (default: 4) fixed
             interval=[1],  # 예측에 사용될 interval fixed

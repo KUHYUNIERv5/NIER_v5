@@ -3,7 +3,7 @@ import numpy as np
 
 import pymysql
 from sqlalchemy import create_engine
-from .utils import read_yaml
+# from .utils import read_yaml
 pymysql.install_as_MySQLdb()
 
 import os
@@ -14,8 +14,9 @@ pd.set_option('display.max_rows', 100)
 inverse_transform = lambda scaled, var, mean : scaled * var + mean
 
 def db_to_pkl(get_data=False, root_dir='./db_save'):
-    yaml_file = read_yaml("../../static.yaml")
-    db_master = yaml_file['DBMaster']
+    # yaml_file = read_yaml("../../static.yaml")
+    # db_master = yaml_file['DBMaster']
+    db_master = "mysql+mysqldb://root:" + "root12" + "@166.104.185.217:32770/AIMTFS_R4"
     if get_data:
         engine = create_engine(db_master,
                                encoding='utf-8')
