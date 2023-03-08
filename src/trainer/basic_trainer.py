@@ -3,7 +3,7 @@
 # @Created   : 2022/10/26 1:45 PM
 # @Author    : Junhyung Kwon
 # @Site      : 
-# @File      : basic_trainer_dev2.py
+# @`File`      : basic_trainer_dev2.py
 # @Software  : PyCharm
 
 from abc import ABC, abstractmethod
@@ -23,7 +23,7 @@ import numpy as np
 
 from ..utils import AverageMeter, easycat, set_random_seed, concatenate
 from ..models import DoubleInceptionModel, SingleInceptionModel, SingleInceptionCRNN, DoubleInceptionCRNN, \
-    DoubleInceptionModel_v2, SingleInceptionModel_v2, SingleInceptionCRNN_v2, DoubleInceptionCRNN_v2, Transformer, BERT
+    DoubleInceptionModel_v2, SingleInceptionModel_v2, SingleInceptionCRNN_v2, DoubleInceptionCRNN_v2     # , Transformer, BERT
 
 
 class BasicTrainer(ABC):
@@ -218,27 +218,41 @@ class BasicTrainer(ABC):
 
         mean, scale, thresholds = train_set.mean, train_set.scale, train_set.threshold_dict[self.pm_type]
 
-        if self.model_name == 'CNN':
-            if self.model_type == 'single':
-                net = SingleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added,
-                                              **model_args)
-            elif self.model_type == 'double':
-                net = DoubleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added,
-                                              **model_args)
-            else:
-                net = DoubleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added,
-                                              **model_args)
+        if self.model_ver == 'v1':
+            if self.model_name == 'CNN':
+                if self.model_type == 'single':
+                    net = SingleInceptionModel(dropout=self.dropout, reg=self.is_reg, **model_args)
+                elif self.model_type == 'double':
+                    net = DoubleInceptionModel(dropout=self.dropout, reg=self.is_reg, **model_args)
+                else:
+                    net = DoubleInceptionModel(dropout=self.dropout, reg=self.is_reg, **model_args)
 
-        if self.model_name == 'RNN':
-            if self.model_type == 'single':
-                net = SingleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
-                                             added_point=is_point_added, **model_args)
-            elif self.model_type == 'double':
-                net = DoubleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
-                                             added_point=is_point_added, **model_args)
-            else:
-                net = DoubleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
-                                             added_point=is_point_added, **model_args)
+            if self.model_name == 'RNN':
+                if self.model_type == 'single':
+                    net = SingleInceptionCRNN(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU', **model_args)
+                elif self.model_type == 'double':
+                    net = DoubleInceptionCRNN(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU', **model_args)
+                else:
+                    net = DoubleInceptionCRNN(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU', **model_args)
+        else:
+            if self.model_name == 'CNN':
+                if self.model_type == 'single':
+                    net = SingleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added, **model_args)
+                elif self.model_type == 'double':
+                    net = DoubleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added, **model_args)
+                else:
+                    net = DoubleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added, **model_args)
+
+            if self.model_name == 'RNN':
+                if self.model_type == 'single':
+                    net = SingleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
+                                                added_point=is_point_added, **model_args)
+                elif self.model_type == 'double':
+                    net = DoubleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
+                                                added_point=is_point_added, **model_args)
+                else:
+                    net = DoubleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
+                                                added_point=is_point_added, **model_args)
 
         train_loader = DataLoader(train_set, batch_size=batch_size)
         val_loader = DataLoader(valid_set, batch_size=batch_size)

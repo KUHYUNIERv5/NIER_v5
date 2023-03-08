@@ -21,7 +21,7 @@ class NIERDataset(Dataset):
     def __init__(self, predict_location_id, predict_pm, shuffle=False, sampling='normal', data_path='../../dataset/d5',
                  data_type='train', pca_dim=None, lag=1, numeric_type='numeric', numeric_data_handling='single',
                  horizon=4, max_lag=7, max_horizon=6, numeric_scenario=1, timepoint_day=4, interval=1, seed=999,
-                 serial_y=False, flatten=True, start_date=20170301, until_date=20220228, co2_load=False):
+                 serial_y=False, flatten=True, start_date=20170301, until_date=20220228, co2_load=False, rm_region=None, exp_name=None):
         """
         NIER Dataset 생성을 위한 class
         :param predict_location_id: 예측하려는 지역 id (R4_59~R4_77)
@@ -42,8 +42,8 @@ class NIERDataset(Dataset):
         :param interval: 예측에 사용될 interval
         :param seed: random seed
         :param serial_y: sequential 예측 여부 (True면 horizon 레이블 값, False면 해당 horizon의 레이블 반환)
+        :rm_region: 제거 지역 그룹 개수, None 이면 제거 지역 고려 X
         """
-
         super(NIERDataset, self).__init__()
         if pca_dim is None:
             pca_dim = dict(
@@ -77,18 +77,55 @@ class NIERDataset(Dataset):
         self.start_date = start_date
         self.until_date = until_date
         self.co2_load = co2_load
+        self.rm_region = rm_region
+        self.exp_name = exp_name # load data할 때 사용할 이름
 
         self.threshold_dict = dict(
             PM10=[30, 80, 150],
             PM25=[15, 35, 75]
         )
+        
+        
+        # if rm_region != 0:
+        #     self.rm_regions, self.rm_regions_pkl_name = self.get_rm_regions(predict_location_id, rm_region)
+        # else:
+        #     self.rm_regions, self.rm_regions_pkl_name = None, 'NIER_R5_data'
 
         self.__read_data__()
+
+    # def get_rm_regions(self, predict_location_id, rm_region):
+    #     with open(f'../NIER_R5_new/data_folder/{self.csv_name}', 'r', encoding='utf-8') as f:
+    #         reader = csv.reader(f)
+    #         rm_regions = None
+    #         for i, line in enumerate(reader):
+    #             if i > 0 and i < 9:
+    #                 line = list(line)
+    #                 region_num = line[0]
+    #                 if region_num == predict_location_id:
+
+    #                     if rm_region == 1:
+    #                         rm_regions = line[2].split(',')
+    #                     elif rm_region == 2:
+    #                         rm_regions = line[2].split(',')+line[3].split(',')
+    #                     elif rm_region == 3:
+    #                         rm_regions = line[2].split(',')+line[3].split(',')+line[4].split(',')
+    #                     rm_regions.sort()
+                
+    #         return rm_regions, "-".join(rm_regions)
 
     def __read_data__(self):
         start_year = str(self.start_date)[2:4]
         test_year = str(self.until_date)[2:4]
-        whole_data = load_data(os.path.join(self.data_path, f'NIER_R5_data_{start_year}_{test_year}.pkl'))
+        
+        
+        whole_data = load_data(os.path.join(self.data_path, f'{self.exp_name}.pkl'))
+        
+        # if self.rm_region != 0:
+        #     # print(self.rm_regions, "are removed")
+        #     whole_data = load_data(os.path.join(self.data_path, f'{self.rm_regions_pkl_name}.pkl'))
+        # elif self.rm_region == 0: # 제거 지역 고려 X
+        #     # print("Using all regions")
+        #     whole_data = load_data(os.path.join(self.data_path, f'NIER_R5_data.pkl'))
 
         self.y_ = whole_data['obs'][self.predict_pm][f'{self.data_type}_y'][self.predict_location_id]
         self.mean, self.scale = whole_data['obs'][self.predict_pm]['mean'], whole_data['obs'][self.predict_pm]['scale']

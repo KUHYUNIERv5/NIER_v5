@@ -81,7 +81,7 @@ class SingleInceptionModel(nn.Module):
         else:
             self.fc2 = nn.Linear(256, 4)
 
-    def forward(self, x_obs, x_fnl, x_num=None):
+    def forward(self, x_obs, x_fnl, x_num=None, point_num=None):
         # first conv (fnl, obs seperately)
         x_obs = self.obs_inception(x_obs)
         x_fnl = self.fnl_inception(x_fnl)
@@ -133,7 +133,7 @@ class DoubleInceptionModel(nn.Module):
         else:
             self.fc2 = nn.Linear(256, 4)
 
-    def forward(self, x_obs, x_fnl, x_num=None):
+    def forward(self, x_obs, x_fnl, x_num=None, point_num=None):
         # first conv (fnl, obs seperately)
         x_obs = self.obs_inception(x_obs)
         x_fnl = self.fnl_inception(x_fnl)

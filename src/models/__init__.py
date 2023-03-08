@@ -10,6 +10,6 @@ from .inception_v2 import *
 from .cnnrnn_v2 import *
 from .inception import *
 from .cnnrnn import *
-from .transformer_modules import *
-from .bert import BERT
-from .transformer import Transformer
+# from .transformer_modules import *
+# from .bert import BERT
+# from .transformer import Transformer
