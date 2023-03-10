@@ -40,9 +40,10 @@ class NIERDataset(Dataset):
                  flatten: bool = True,
                  period_version: str = 'p1',
                  test_period_version: str = 'tmp',
+                 validation_year: int = 2021,
                  co2_load: bool = False,
                  rm_region: int = 0,
-                 exp_name: Any = None):
+                 exp_name: str = None):
         """
         NIER Dataset 생성을 위한 class
         :param predict_location_id: 예측하려는 지역 id (R4_59~R4_77)
@@ -76,6 +77,21 @@ class NIERDataset(Dataset):
             )
         assert numeric_type in ['wrf', 'cmaq', 'numeric'], f'bad numeric type: {numeric_type}'
         assert numeric_scenario in [0, 1, 2, 3, 4], f'bad scenario: {numeric_scenario}'
+
+        end_date = 20211231
+        if test_period_version == 'v1':
+            end_date = 20201231
+        train_periods = dict(
+            p1=[20170301, end_date],
+            p2=[20180101, end_date],
+            p3=[20190101, end_date],
+            p4=[20200101, end_date],
+        )
+        test_periods = dict(
+            v1=[20210101, 20211231],
+            v2=[20220101, 20221231],
+            tmp=[20211201, 20211231]
+        )
         self.predict_location_id = predict_location_id
         self.predict_pm = predict_pm
         self.sampling = sampling if data_type == 'train' else 'normal'
@@ -97,14 +113,15 @@ class NIERDataset(Dataset):
         self.flatten = flatten
         self.co2_load = co2_load
         self.rm_region = rm_region
-        self.exp_name = exp_name # load data할 때 사용할 이름
-
+        self.exp_name = exp_name  # load data할 때 사용할 이름
+        self.train_period = train_periods[period_version]
+        self.test_period = test_periods[test_period_version]
+        self.validation_year = validation_year
         self.threshold_dict = dict(
             PM10=[30, 80, 150],
             PM25=[15, 35, 75]
         )
-        
-        
+
         # if rm_region != 0:
         #     self.rm_regions, self.rm_regions_pkl_name = self.get_rm_regions(predict_location_id, rm_region)
         # else:
@@ -129,16 +146,17 @@ class NIERDataset(Dataset):
     #                     elif rm_region == 3:
     #                         rm_regions = line[2].split(',')+line[3].split(',')+line[4].split(',')
     #                     rm_regions.sort()
-                
+
     #         return rm_regions, "-".join(rm_regions)
 
     def __read_data__(self):
-        start_year = str(self.start_date)[2:4]
-        test_year = str(self.until_date)[2:4]
-        
-        
+        # start_year = str(self.train_period[0])[2:4]
+        # test_year = str(self.train_period[1])[2:4]
+        start_year = '19'
+        test_year = '21'
+
         whole_data = load_data(os.path.join(self.data_path, f'{self.exp_name}.pkl'))
-        
+
         # if self.rm_region != 0:
         #     # print(self.rm_regions, "are removed")
         #     whole_data = load_data(os.path.join(self.data_path, f'{self.rm_regions_pkl_name}.pkl'))
