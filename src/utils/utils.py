@@ -17,6 +17,41 @@ import random
 import logging
 import yaml
 
+from .vector_utils import all_equal
+
+
+def get_best_hyperparam(predict_region, settings):
+    representatives = []
+    for group in settings['region_groups']:
+        if predict_region in settings['region_groups'][group]['regions']:
+            representatives.append(settings['region_groups'][group]['representative'])
+
+    res = dict()
+    check_equality = lambda li: li if not all_equal(li) else [li[0]]
+    for representative in representatives:
+        res[representative] = dict(
+            pm10=dict(
+                periods=[],
+                remove_regions=[],
+                representative_region=[representative]
+            ),
+            pm25=dict(
+                periods=[],
+                remove_regions=[],
+                representative_region=[representative]
+            )
+        )
+        res[representative]['pm10']['periods'] = check_equality(
+            settings['best_hyperparams']['period_optimized']['pm10'][representative])
+        res[representative]['pm10']['remove_regions'] = check_equality(
+            settings['best_hyperparams']['regions_optimized']['pm10'][representative])
+        res[representative]['pm25']['periods'] = check_equality(
+            settings['best_hyperparams']['period_optimized']['pm25'][representative])
+        res[representative]['pm25']['remove_regions'] = check_equality(
+            settings['best_hyperparams']['regions_optimized']['pm25'][representative])
+
+    return res
+
 
 # Function for repeatability
 def set_random_seed(seed_value):
@@ -45,16 +80,19 @@ def not_null(df, col):
 def not_null_df(df, col):
     return df[~df[col].isnull()]
 
+
 def read_yaml(dir):
     with open(dir, 'rb') as f:
         data = yaml.load(f, Loader=yaml.FullLoader)
         return data
+
 
 def read_json(path):
     with open(path) as json_file:
         json_data = json.load(json_file)
 
     return json_data
+
 
 def write_yaml(dir, data):
     with open(dir, 'w') as f:
