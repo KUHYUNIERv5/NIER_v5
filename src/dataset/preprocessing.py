@@ -28,7 +28,7 @@ Phase2에서 변경된 점:
 """
 
 class MakeNIERDataset(ABC):
-    def __init__(self, reset_db=False, period_version='p1', test_period_version='v2', seed=999,
+    def __init__(self, reset_db=False, period_version='p1', test_period_version='tmp', seed=999,
                  preprocess_root='../dataset/d5', root_dir="/workspace/local/src/datagen/ver_4th/db_save",
                  save_processed_data=True, run_pca=True, predict_region='R4_62', remove_region=0,
                  rmgroup_file='../NIER_v5/data_folder/height_region_list.csv'):
@@ -44,7 +44,8 @@ class MakeNIERDataset(ABC):
         )
         test_periods = dict(
             v1=[20210101, 20211231],
-            v2=[20220101, 20221231]
+            v2=[20220101, 20221231],
+            tmp=[20211201, 20211231]
         )
         self.reset_db = reset_db
         self.preprocess_root = preprocess_root

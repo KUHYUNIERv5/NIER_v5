@@ -1,0 +1,150 @@
+region_groups:
+  g1:
+    regions:
+    - R4_59
+    - R4_60
+    - R4_61
+    - R4_62
+    - R4_63
+    - R4_65
+    representative: R4_62
+  g2:
+    regions:
+    - R4_64
+    representative: R4_64
+  g3:
+    regions:
+    - R4_63
+    - R4_65
+    - R4_66
+    - R4_67
+    - R4_68
+    representative: R4_67
+  g4:
+    regions:
+    - R4_69
+    - R4_72
+    representative: R4_69
+  g5:
+    regions:
+    - R4_70
+    - R4_71
+    representative: R4_71
+  g6:
+    regions:
+    - R4_73
+    representative: R4_73
+  g7:
+    regions:
+    - R4_74
+    - R4_75
+    - R4_76
+    representative: R4_76
+  g8:
+    regions:
+    - R4_77
+    representative: R4_77
+
+best_hyperparams:
+  period_optimized:
+    pm10:
+      R4_62:
+        - p1
+        - p4
+      R4_64:
+        - p1
+        - p2
+      R4_67:
+        - p2
+        - p4
+      R4_69:
+        - p2
+        - p3
+      R4_71:
+        - p4
+        - p1
+      R4_73:
+        - p2
+        - p1
+      R4_76:
+        - p2
+        - p2
+      R4_77:
+        - p4
+        - p1
+    pm25:
+      R4_62:
+        - p4
+        - p4
+      R4_64:
+        - p1
+        - p1
+      R4_67:
+        - p3
+        - p4
+      R4_69:
+        - p2
+        - p3
+      R4_71:
+        - p1
+        - p1
+      R4_73:
+        - p3
+        - p3
+      R4_76:
+        - p3
+        - p2
+      R4_77:
+        - p2
+        - p2
+  regions_optimized:
+    pm10:
+      R4_62:
+        - 1
+        - 2
+      R4_64:
+        - 2
+        - 1
+      R4_67:
+        - 2
+        - 3
+      R4_69:
+        - 1
+        - 0
+      R4_71:
+        - 2
+        - 1
+      R4_73:
+        - 3
+        - 1
+      R4_76:
+        - 3
+        - 1
+      R4_77:
+        - 1
+        - 1
+    pm25:
+      R4_62:
+        - 1
+        - 1
+      R4_64:
+        - 1
+        - 1
+      R4_67:
+        - 0
+        - 0
+      R4_69:
+        - 1
+        - 1
+      R4_71:
+        - 1
+        - 1
+      R4_73:
+        - 0
+        - 1
+      R4_76:
+        - 1
+        - 2
+      R4_77:
+        - 2
+        - 1

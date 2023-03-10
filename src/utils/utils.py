@@ -56,6 +56,10 @@ def read_json(path):
 
     return json_data
 
+def write_yaml(dir, data):
+    with open(dir, 'w') as f:
+        yaml.dump(data, f)
+
 
 # def read_json(file):
 #     tweets = []

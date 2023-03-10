@@ -8,6 +8,12 @@
 
 import torch
 import numpy as np
+from itertools import groupby
+
+
+def all_equal(iterable):
+    g = groupby(iterable)
+    return next(g, True) and not next(g, False)
 
 def one_hot(array):
     unique, inverse = np.unique(array, return_inverse=True)
