@@ -14,7 +14,7 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
-from ..utils import region_flatten_cwdb, db_to_pkl, check_array, load_data, save_data, read_yaml
+from ..utils import region_flatten_cwdb, db_to_pkl, check_array, load_data, save_data
 
 from abc import ABC
 
@@ -461,6 +461,169 @@ class MakeNIERDataset(ABC):
         test_flat = []
 
         regions = list(main_df['train'].keys())
+
+        ########### region tuning 시 바꿔야 할 부분 #############
+
+        for i, region in enumerate(regions):
+            if region in self.rm_regions:
+                print('remove region: ', region)
+            else:
+                train_flat.append(main_df['train'][region])
+                test_flat.append(main_df['test'][region])
+
+            # !!!!!!!!!!!!!!!!!!!!!!!!!!! CMAQ 부분이 변경됨 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        #             if df_type == 'cmaq' or df_type == 'numeric':
+        #                 cmaq_train_pm = []
+        #                 cmaq_test_pm = []
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!! CMAQ 부분이 변경됨 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+        #####################################################
+
+        if df_type == 'obs':
+            pm_idx = {
+                'PM10': -6,
+                'PM25': -5
+            }
+
+            pm10_mean, pm10_var = main_df['scaler'].mean_[pm_idx['PM10']], main_df['scaler'].scale_[pm_idx['PM10']]
+            pm25_mean, pm25_var = main_df['scaler'].mean_[pm_idx['PM25']], main_df['scaler'].scale_[pm_idx['PM25']]
+
+            return_data['PM10'] = {
+                'mean': pm10_mean,
+                'scale': pm10_var,
+                'train_y': {},
+                'test_y': {}
+            }
+            return_data['PM25'] = {
+                'mean': pm25_mean,
+                'scale': pm25_var,
+                'train_y': {},
+                'test_y': {}
+            }
+
+            """
+            기존에는 pca를 모든 predict region에 대해서 했으나, remove region이 들어간 상태에서는 predict region마다 파일을 저장하기 때문에
+            list로 저장할 필요가 없다는 판단하에 삭제 (Junhyung).
+            """
+
+            # region_list = list(main_df['train'].keys())
+            # try:
+            #     region_list.remove('chinese_region')
+            # except ValueError as e:
+            #     print(e)
+
+            # for j, predict_region in enumerate(region_list):
+
+            predict_region = self.predict_region
+
+            return_data['X'][predict_region] = {}
+
+            # if j > 0:
+            #     _ = train_flat.pop()
+            #     _ = test_flat.pop()
+
+            train_flat.append(self.cw['train'][predict_region])
+            test_flat.append(self.cw['test'][predict_region])
+
+            return_data['PM10']['train_y'][predict_region] = main_df['train'][predict_region]['PM10']
+            return_data['PM10']['test_y'][predict_region] = main_df['test'][predict_region]['PM10']
+            return_data['PM25']['train_y'][predict_region] = main_df['train'][predict_region]['PM25']
+            return_data['PM25']['test_y'][predict_region] = main_df['test'][predict_region]['PM25']
+
+            trainset = pd.concat(train_flat, axis=1)
+            testset = pd.concat(test_flat, axis=1)
+
+            pca = PCA(svd_solver='full', random_state=self.seed)
+            pca.fit(trainset)
+            return_data['pca'][predict_region] = pca
+
+            for latent_dim in pca_latent_dim_list:
+                return_data['X'][predict_region][f'pca_{latent_dim}'] = {}
+                train_pca = np.dot(check_array(trainset) - pca.mean_, pca.components_[:latent_dim].T)
+                test_pca = np.dot(check_array(testset) - pca.mean_, pca.components_[:latent_dim].T)
+                train_pca = pd.DataFrame(train_pca)
+                test_pca = pd.DataFrame(test_pca)
+
+                train_X = train_pca.set_index(trainset.index)
+                test_X = test_pca.set_index(testset.index)
+
+                return_data['X'][predict_region][f'pca_{latent_dim}']['train'] = train_X
+                return_data['X'][predict_region][f'pca_{latent_dim}']['test'] = test_X
+
+        elif df_type == 'numeric':
+            regions = list(self.wrf['train'].keys())
+            ########### region tuning 시 바꿔야 할 부분 #############
+
+            for i, region in enumerate(regions):
+                if region in self.rm_regions:
+                    print('numeric - remove region: ', region)
+                else:
+                    train_flat.append(self.wrf['train'][region])
+                    test_flat.append(self.wrf['test'][region])
+
+            #####################################################
+
+            trainset = pd.concat(train_flat, axis=1)
+            testset = pd.concat(test_flat, axis=1)
+
+            pca = PCA(svd_solver='full', random_state=self.seed)
+            pca.fit(trainset)
+            return_data['pca'] = pca
+
+            for latent_dim in pca_latent_dim_list:
+                return_data['X'][f'pca_{latent_dim}'] = {}
+                train_pca = np.dot(check_array(trainset) - pca.mean_, pca.components_[:latent_dim].T)
+                test_pca = np.dot(check_array(testset) - pca.mean_, pca.components_[:latent_dim].T)
+                train_pca = pd.DataFrame(train_pca)
+                test_pca = pd.DataFrame(test_pca)
+
+                train_X = train_pca.set_index(trainset.index)
+                test_X = test_pca.set_index(testset.index)
+
+                return_data['X'][f'pca_{latent_dim}']['train'] = train_X
+                return_data['X'][f'pca_{latent_dim}']['test'] = test_X
+
+        else:
+            if df_type == 'fnl':
+                train_flat.append(self.ewkr['train']['chinese_region'])
+                test_flat.append(self.ewkr['test']['chinese_region'])
+
+            trainset = pd.concat(train_flat, axis=1)
+            testset = pd.concat(test_flat, axis=1)
+
+            pca = PCA(svd_solver='full', random_state=self.seed)
+            pca.fit(trainset)
+            return_data['pca'] = pca
+
+            for latent_dim in pca_latent_dim_list:
+                return_data['X'][f'pca_{latent_dim}'] = {}
+                train_pca = np.dot(check_array(trainset) - pca.mean_, pca.components_[:latent_dim].T)
+                test_pca = np.dot(check_array(testset) - pca.mean_, pca.components_[:latent_dim].T)
+                train_pca = pd.DataFrame(train_pca)
+                test_pca = pd.DataFrame(test_pca)
+
+                train_X = train_pca.set_index(trainset.index)
+                test_X = test_pca.set_index(testset.index)
+
+                return_data['X'][f'pca_{latent_dim}']['train'] = train_X
+                return_data['X'][f'pca_{latent_dim}']['test'] = test_X
+
+        return return_data
+
+    def _pca_fitting_original(self, main_df, df_type, pca_latent_dim_list=None):
+        if pca_latent_dim_list is None:
+            pca_latent_dim_list = [64, 128, 256, 512]
+
+        return_data = {
+            'X': {},
+            'pca': {}
+        }
+
+        train_flat = []
+        test_flat = []
+
+        regions = list(main_df['train'].keys())
+
         ########### region tuning 시 바꿔야 할 부분 #############
 
         for i, region in enumerate(regions):

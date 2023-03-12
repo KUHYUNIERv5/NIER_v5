@@ -40,7 +40,7 @@ class NIERDataset(Dataset):
                  flatten: bool = True,
                  period_version: str = 'p1',
                  test_period_version: str = 'tmp',
-                 validation_year: int = 2021,
+                 esv_year: int = 2021, # early stopping validation year
                  co2_load: bool = False,
                  rm_region: int = 0,
                  exp_name: str = None):
@@ -75,6 +75,13 @@ class NIERDataset(Dataset):
                 cmaq=512,
                 numeric=512
             )
+        esv_years = dict(
+            p1=[2017, 2018, 2019, 2020],
+            p2=[2018, 2019, 2020],
+            p3=[2019, 2020],
+            p4=[2020],
+        )
+        assert esv_year in esv_years[period_version], f'bad esv year. {esv_year} not included in {esv_years[period_version]}'
         assert numeric_type in ['wrf', 'cmaq', 'numeric'], f'bad numeric type: {numeric_type}'
         assert numeric_scenario in [0, 1, 2, 3, 4], f'bad scenario: {numeric_scenario}'
 
@@ -92,6 +99,7 @@ class NIERDataset(Dataset):
             v2=[20220101, 20221231],
             tmp=[20211201, 20211231]
         )
+
         self.predict_location_id = predict_location_id
         self.predict_pm = predict_pm
         self.sampling = sampling if data_type == 'train' else 'normal'
@@ -116,7 +124,11 @@ class NIERDataset(Dataset):
         self.exp_name = exp_name  # load data할 때 사용할 이름
         self.train_period = train_periods[period_version]
         self.test_period = test_periods[test_period_version]
-        self.validation_year = validation_year
+        self.esv_year = esv_year
+        self.is_validation = True if self.data_type == 'valid' else False
+        if self.data_type == 'valid':
+            self.data_type = 'train'
+
         self.threshold_dict = dict(
             PM10=[30, 80, 150],
             PM25=[15, 35, 75]
@@ -173,10 +185,23 @@ class NIERDataset(Dataset):
             self.data_type].reset_index()
         self.dec_X = self.dec_X.set_index(['RAW_DATE'])
 
-        if self.co2_load:
-            co2_data = load_data(os.path.join(self.data_path, f'co2_{start_year}_to_{test_year}.pkl'))
-            co2_X = co2_data[self.data_type][self.predict_location_id]
-            self.obs_X = pd.concat([self.obs_X, co2_X], axis=1)
+        if self.is_validation:
+            start_date, end_date = int(str(self.esv_year) + "0101"), int(str(self.esv_year) + "1231")
+            self.obs_X = self.obs_X.loc[(start_date):(end_date)]
+            self.fnl_X = self.fnl_X.loc[(start_date):(end_date)]
+            self.dec_X = self.dec_X.loc[(start_date):(end_date)]
+
+            if self.co2_load:
+                co2_data = load_data(os.path.join(self.data_path, f'co2_{start_year}_to_{test_year}.pkl'))
+                co2_X = co2_data[self.data_type][self.predict_location_id]
+                co2_X = co2_X.loc[(start_date):(end_date)]
+                self.obs_X = pd.concat([self.obs_X, co2_X], axis=1)
+
+        else:
+            if self.co2_load:
+                co2_data = load_data(os.path.join(self.data_path, f'co2_{start_year}_to_{test_year}.pkl'))
+                co2_X = co2_data[self.data_type][self.predict_location_id]
+                self.obs_X = pd.concat([self.obs_X, co2_X], axis=1)
 
         self.max_length = (len(self.obs_X) - 3 - 4 * (
                 self.max_lag + self.max_horizon)) // 4 + 1  # (len(self.obs_X) - 4 * ((self.max_lag - 1) + (self.max_horizon))) // 4
