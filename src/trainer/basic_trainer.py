@@ -6,6 +6,8 @@
 # @`File`      : basic_trainer_dev2.py
 # @Software  : PyCharm
 
+from typing import Union
+from collections.abc import Iterable
 from abc import ABC, abstractmethod
 
 import torch
@@ -23,7 +25,8 @@ import numpy as np
 
 from ..utils import AverageMeter, easycat, set_random_seed, concatenate
 from ..models import DoubleInceptionModel, SingleInceptionModel, SingleInceptionCRNN, DoubleInceptionCRNN, \
-    DoubleInceptionModel_v2, SingleInceptionModel_v2, SingleInceptionCRNN_v2, DoubleInceptionCRNN_v2     # , Transformer, BERT
+    DoubleInceptionModel_v2, SingleInceptionModel_v2, SingleInceptionCRNN_v2, \
+    DoubleInceptionCRNN_v2  # , Transformer, BERT
 
 
 class BasicTrainer(ABC):
@@ -237,22 +240,25 @@ class BasicTrainer(ABC):
         else:
             if self.model_name == 'CNN':
                 if self.model_type == 'single':
-                    net = SingleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added, **model_args)
+                    net = SingleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added,
+                                                  **model_args)
                 elif self.model_type == 'double':
-                    net = DoubleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added, **model_args)
+                    net = DoubleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added,
+                                                  **model_args)
                 else:
-                    net = DoubleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added, **model_args)
+                    net = DoubleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added,
+                                                  **model_args)
 
             if self.model_name == 'RNN':
                 if self.model_type == 'single':
                     net = SingleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
-                                                added_point=is_point_added, **model_args)
+                                                 added_point=is_point_added, **model_args)
                 elif self.model_type == 'double':
                     net = DoubleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
-                                                added_point=is_point_added, **model_args)
+                                                 added_point=is_point_added, **model_args)
                 else:
                     net = DoubleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
-                                                added_point=is_point_added, **model_args)
+                                                 added_point=is_point_added, **model_args)
 
         train_loader = DataLoader(train_set, batch_size=batch_size)
         val_loader = DataLoader(valid_set, batch_size=batch_size)
@@ -263,6 +269,62 @@ class BasicTrainer(ABC):
                                                                     objective_args=objective_args)
         return net, model_weights, best_model_weights, return_dict
 
+    def esv_train(self, train_set: Dataset, valid_sets: Iterable[Dataset], esv_years: Iterable[int],
+                  model_args: dict, optimizer_args: dict, objective_args: dict, param_args: dict, batch_size=64, ):
+        assert self.model_ver is 'v2', f'model version except for v2 is not acceptable. current: {self.model_ver}'
+        self.lag = model_args['lag']
+        self.horizon = param_args['horizon']
+        self.sampling = param_args['sampling']
+        self.region = param_args['region']
+
+        if train_set.numeric_scenario == 4 and train_set.horizon > 3 and self.model_ver == 'v2':
+            is_point_added = True
+        else:
+            is_point_added = False
+
+        setting = f"{self.region} | Device:{self.device} | Horizon:{self.horizon} | {self.model_name} | is_Reg:{self.is_reg} | Lag:{self.lag} | " \
+                  f"{self.model_type} | {self.sampling} "
+        if self.log_flag:
+            self.logger.info(setting)
+
+        mean, scale, thresholds = train_set.mean, train_set.scale, train_set.threshold_dict[self.pm_type]
+
+        if self.model_name == 'CNN':
+            if self.model_type == 'single':
+                net = SingleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added,
+                                              **model_args)
+            elif self.model_type == 'double':
+                net = DoubleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added,
+                                              **model_args)
+            else:
+                net = DoubleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added,
+                                              **model_args)
+        elif self.model_name == 'RNN':
+            if self.model_type == 'single':
+                net = SingleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
+                                             added_point=is_point_added, **model_args)
+            elif self.model_type == 'double':
+                net = DoubleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
+                                             added_point=is_point_added, **model_args)
+            else:
+                net = DoubleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
+                                             added_point=is_point_added, **model_args)
+
+        train_loader = DataLoader(train_set, batch_size=batch_size)
+        valid_loaders = []
+        for valid_set, esv_year in zip(valid_sets, esv_years):
+            valid_loaders.append(DataLoader(valid_set, batch_size=batch_size))
+
+        _, best_model_weights, return_dict = self.train(train_loader, valid_loaders, scale, mean, thresholds, net,
+                                                        optimizer_args=optimizer_args, objective_args=objective_args,
+                                                        esv_years=esv_years)
+
+        # model_weights, best_model_weights, return_dict = self.train(train_loader, val_loader, scale, mean,
+        #                                                             thresholds, net,
+        #                                                             optimizer_args=optimizer_args,
+        #                                                             objective_args=objective_args)
+        return net, best_model_weights, return_dict
+
     def _thresholding(self, array, thresholds):
         y = array.squeeze()
         y_cls = np.zeros_like(y)
@@ -270,12 +332,25 @@ class BasicTrainer(ABC):
             y_cls[y > threshold] = i + 1
         return y_cls
 
-    def train(self, trainloader: DataLoader, validloader: DataLoader, scale: float, mean: float, thresholds: list,
-              net: nn.Module, optimizer_args: dict, objective_args: dict):
+    def train(self, trainloader: DataLoader, validloader: Union[DataLoader, Iterable[DataLoader]], scale: float,
+              mean: float, thresholds: list,
+              net: nn.Module, optimizer_args: dict, objective_args: dict, esv_years=None):
         """
         Implement train method that trains the given network using the train_set of dataset.
         :return: Trained net, best network state_dict
         """
+        validation_obj = dict(
+            val_preds={},
+            val_labels={},
+            val_losses={},
+            val_orig_preds={}
+        )
+        is_esv = False
+        if type(validloader) is list:
+            is_esv = True
+            best_scores = {}
+            for esv_year in esv_years:
+                best_scores[esv_year] = -1111
 
         self.setup(net.parameters(), optimizer_args, objective_args)
         net.to(self.device)
@@ -300,6 +375,19 @@ class BasicTrainer(ABC):
             y_label=None,  # label lists
             best_orig_pred=None  # original prediction lists
         )
+        if is_esv:
+            return_dict = dict(
+                train_score_list=[],
+                val_score_list={},
+                train_loss_list=[],
+                val_loss_list={},
+                best_f1s={},
+                best_epochs={},
+                best_scores={},
+                best_preds={},  # prediction lists
+                y_labels={},  # label lists
+                best_orig_preds={}  # original prediction lists
+            )
 
         # self.logger.info(f"Device {self.device} start training")
 
@@ -307,36 +395,93 @@ class BasicTrainer(ABC):
             # Train stage
             train_orig_pred, train_pred, train_label, train_loss = self._run_epoch(trainloader, net, scale, mean)
 
-            # validation stage
-            val_orig_pred, val_pred, val_label, val_loss = self._run_epoch(validloader, net, scale, mean,
-                                                                           is_train=False)
-
             if self.is_reg:
                 train_pred_score = self._thresholding(train_pred, thresholds)
                 train_label_score = self._thresholding(train_label, thresholds)
-                val_pred_score = self._thresholding(val_pred, thresholds)
-                val_label_score = self._thresholding(val_label, thresholds)
             else:
                 train_pred_score = train_pred
                 train_label_score = train_label
-                val_pred_score = val_pred
-                val_label_score = val_label
 
             train_score = self._evaluation(train_label_score, train_pred_score)
-            val_score = self._evaluation(val_label_score, val_pred_score)
+
             if self.is_reg:
                 train_score['RMSE'] = np.sqrt(train_loss)
-                val_score['RMSE'] = np.sqrt(val_loss)
 
             return_dict['train_score_list'].append(train_score)
-            return_dict['val_score_list'].append(val_score)
             return_dict['train_loss_list'].append(train_loss)
-            return_dict['val_loss_list'].append(val_loss)
 
-            message = f"{self.device} Epoch {epoch}/{self.n_epochs} | train loss: {train_loss} | valid loss: {val_loss}\n" \
-                      f"\t\t\t\ttrain f1 score: {train_score['f1']} | valid f1 score: {val_score['f1']}"
-            if self.log_flag:
-                self.logger.info(message)
+            # validation stage
+            if is_esv:
+                msg_obj = {
+                    'val_loss': {},
+                    'val_score': {}
+                }
+
+                val_loss_avg = 0
+
+                for esv_year in esv_years:
+                    return_dict['val_score_list'][esv_year] = []
+                    return_dict['val_loss_list'][esv_year] = []
+
+                for vl, esv_year in zip(validloader, esv_years):
+                    val_orig_pred, val_pred, val_label, val_loss = self._run_epoch(vl, net, scale, mean, is_train=False)
+                    validation_obj['val_losses'][esv_year] = val_loss
+                    validation_obj['val_preds'][esv_year] = val_pred
+                    validation_obj['val_labels'][esv_year] = val_label
+                    validation_obj['val_orig_preds'][esv_year] = val_orig_pred
+
+                    if self.is_reg:
+                        val_pred_score = self._thresholding(val_pred, thresholds)
+                        val_label_score = self._thresholding(val_label, thresholds)
+
+                    else:
+                        val_pred_score = val_pred
+                        val_label_score = val_label
+
+                    val_score = self._evaluation(val_label_score, val_pred_score)
+                    if self.is_reg:
+                        val_score['RMSE'] = np.sqrt(val_loss)
+
+                    return_dict['val_score_list'][esv_year].append(val_score)
+                    return_dict['val_loss_list'][esv_year].append(val_loss)
+
+                    val_loss_avg += val_loss
+
+
+                    msg_obj['val_loss']['esv_year'] = val_loss
+                    msg_obj['val_score']['esv_year'] = val_score['f1']
+
+                val_loss_avg = val_loss_avg / len(esv_years)
+
+                message = f"{self.device} Epoch {epoch}/{self.n_epochs} | train loss: {train_loss} | valid losses: {msg_obj['val_loss']}\n" \
+                          f"\t\t\t\ttrain f1 score: {train_score['f1']} | valid f1 score: {msg_obj['val_score']}"
+                if self.log_flag:
+                    self.logger.info(message)
+
+            else:
+                val_orig_pred, val_pred, val_label, val_loss = self._run_epoch(validloader, net, scale, mean,
+                                                                           is_train=False)
+
+                val_loss_avg = val_loss.avg
+
+                if self.is_reg:
+                    val_pred_score = self._thresholding(val_pred, thresholds)
+                    val_label_score = self._thresholding(val_label, thresholds)
+                else:
+                    val_pred_score = val_pred
+                    val_label_score = val_label
+
+                val_score = self._evaluation(val_label_score, val_pred_score)
+                if self.is_reg:
+                    val_score['RMSE'] = np.sqrt(val_loss)
+
+                return_dict['val_score_list'].append(val_score)
+                return_dict['val_loss_list'].append(val_loss)
+
+                message = f"{self.device} Epoch {epoch}/{self.n_epochs} | train loss: {train_loss} | valid loss: {val_loss}\n" \
+                          f"\t\t\t\ttrain f1 score: {train_score['f1']} | valid f1 score: {val_score['f1']}"
+                if self.log_flag:
+                    self.logger.info(message)
 
             if val_score['f1'] > best_loss and epoch > 0:
                 best_loss = val_score['f1']
@@ -354,7 +499,7 @@ class BasicTrainer(ABC):
 
             if not self.scheduler is None:
                 if self.scheduler == 'ReduceLROnPlateau':
-                    scheduler.step(val_loss.avg)
+                    scheduler.step(val_loss_avg)
                 else:
                     scheduler.step()
 

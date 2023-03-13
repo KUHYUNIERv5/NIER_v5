@@ -23,7 +23,7 @@ class NIERDataset(Dataset):
                  predict_pm,
                  shuffle: bool = False,
                  sampling: str = 'normal',
-                 data_path: str = '../../dataset/d5',
+                 data_path: str = '../../dataset/d5_phase2',
                  data_type: str = 'train',
                  pca_dim: dict = None,
                  lag: int = 1,
@@ -37,7 +37,7 @@ class NIERDataset(Dataset):
                  interval: int = 1,
                  seed: int = 999,
                  serial_y: bool = False,
-                 flatten: bool = True,
+                 # flatten: bool = True,
                  period_version: str = 'p1',
                  test_period_version: str = 'tmp',
                  esv_year: int = 2021, # early stopping validation year
@@ -65,6 +65,7 @@ class NIERDataset(Dataset):
         :param seed: random seed
         :param serial_y: sequential 예측 여부 (True면 horizon 레이블 값, False면 해당 horizon의 레이블 반환)
         :rm_region: 제거 지역 그룹 개수, None 이면 제거 지역 고려 X
+        :exp_name: 데이터 파일 명
         """
         super(NIERDataset, self).__init__()
         if pca_dim is None:
@@ -76,10 +77,10 @@ class NIERDataset(Dataset):
                 numeric=512
             )
         esv_years = dict(
-            p1=[2017, 2018, 2019, 2020],
-            p2=[2018, 2019, 2020],
-            p3=[2019, 2020],
-            p4=[2020],
+            p1=[2017, 2018, 2019, 2020, 2021],
+            p2=[2018, 2019, 2020, 2021],
+            p3=[2019, 2020, 2021],
+            p4=[2020, 2021],
         )
         assert esv_year in esv_years[period_version], f'bad esv year. {esv_year} not included in {esv_years[period_version]}'
         assert numeric_type in ['wrf', 'cmaq', 'numeric'], f'bad numeric type: {numeric_type}'
@@ -118,7 +119,7 @@ class NIERDataset(Dataset):
         self.shuffle = shuffle
         self.seed = seed
         self.serial_y = serial_y
-        self.flatten = flatten
+        # self.flatten = flatten
         self.co2_load = co2_load
         self.rm_region = rm_region
         self.exp_name = exp_name  # load data할 때 사용할 이름
@@ -187,9 +188,14 @@ class NIERDataset(Dataset):
 
         if self.is_validation:
             start_date, end_date = int(str(self.esv_year) + "0101"), int(str(self.esv_year) + "1231")
+            # print(start_date, end_date)
+            # print(self.obs_X)
             self.obs_X = self.obs_X.loc[(start_date):(end_date)]
             self.fnl_X = self.fnl_X.loc[(start_date):(end_date)]
             self.dec_X = self.dec_X.loc[(start_date):(end_date)]
+            self.y_ = self.y_.loc[(start_date):(end_date)]
+
+            # print(len(self.obs_X), len(self.fnl_X), len(self.dec_X), len(self.y_))
 
             if self.co2_load:
                 co2_data = load_data(os.path.join(self.data_path, f'co2_{start_year}_to_{test_year}.pkl'))
@@ -197,8 +203,7 @@ class NIERDataset(Dataset):
                 co2_X = co2_X.loc[(start_date):(end_date)]
                 self.obs_X = pd.concat([self.obs_X, co2_X], axis=1)
 
-        else:
-            if self.co2_load:
+        elif self.co2_load:
                 co2_data = load_data(os.path.join(self.data_path, f'co2_{start_year}_to_{test_year}.pkl'))
                 co2_X = co2_data[self.data_type][self.predict_location_id]
                 self.obs_X = pd.concat([self.obs_X, co2_X], axis=1)
