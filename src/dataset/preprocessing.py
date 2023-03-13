@@ -33,7 +33,7 @@ Phase2에서 변경된 점:
 
 class MakeNIERDataset(ABC):
     def __init__(self, reset_db=False, period_version='p1', test_period_version='v2', seed=999, reset_predata=False,
-                 preprocess_root='../dataset/d5', root_dir="/workspace/local/src/datagen/ver_4th/db_save",
+                 preprocess_root='../dataset/d5_phase2', root_dir="/workspace/local/src/datagen/ver_4th/db_save",
                  save_processed_data=True, run_pca=True, predict_region='R4_62', representative_region='R4_62',
                  remove_region=0,
                  rmgroup_file='../NIER_v5/data_folder/height_region_list.csv'):

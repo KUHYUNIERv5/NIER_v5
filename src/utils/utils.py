@@ -17,8 +17,8 @@ import random
 import logging
 import yaml
 
-from .vector_utils import all_equal
-
+from .vector_utils import all_equal, concatenate
+from sklearn.model_selection import ParameterGrid
 
 def get_best_hyperparam(predict_region, settings):
     representatives = []
@@ -50,6 +50,17 @@ def get_best_hyperparam(predict_region, settings):
         res[representative]['pm25']['remove_regions'] = check_equality(
             settings['best_hyperparams']['regions_optimized']['pm25'][representative])
 
+    return res
+
+def get_region_grid(region, settings, pm_type):
+    hyperparam = get_best_hyperparam(region, settings)
+
+    final_grid = None
+    for k in hyperparam.keys():
+        hyperparam[k]
+        final_grid = np.array(list(ParameterGrid(hyperparam[k][pm_type])))
+
+    res = list(map(dict, set(tuple(sorted(sub.items())) for sub in final_grid)))
     return res
 
 
