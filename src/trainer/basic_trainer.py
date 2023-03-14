@@ -388,7 +388,7 @@ class BasicTrainer(ABC):
             val_loss_list=[],
             best_f1=0.,
             best_epoch=0,
-            best_score=0.,
+            best_result=0.,
             best_pred=None,  # prediction lists
             y_label=None,  # label lists
             best_orig_pred=None  # original prediction lists
@@ -405,7 +405,7 @@ class BasicTrainer(ABC):
                 train_loss_list=[],
                 best_f1s={},
                 best_epochs={},
-                best_scores={},
+                best_results={},
                 best_preds={},  # prediction lists
                 y_labels={},  # label lists
                 best_orig_preds={}  # original prediction lists
@@ -473,7 +473,7 @@ class BasicTrainer(ABC):
                         return_dict['y_labels'][esv_year] = val_label
                         return_dict['best_preds'][esv_year] = val_pred
                         return_dict['best_orig_preds'][esv_year] = val_orig_pred
-                        return_dict['best_scores'][esv_year] = val_score
+                        return_dict['best_results'][esv_year] = val_score
                         return_dict['best_epochs'][esv_year] = epoch
                         return_dict['best_f1s'][esv_year] = val_score['f1']
                         best_model_weights[esv_year] = deepcopy(net.cpu().state_dict())
@@ -519,7 +519,7 @@ class BasicTrainer(ABC):
                     return_dict['y_label'] = val_label
                     return_dict['best_pred'] = val_pred
                     return_dict['best_orig_pred'] = val_orig_pred
-                    return_dict['best_score'] = val_score
+                    return_dict['best_result'] = val_score
                     return_dict['best_epoch'] = epoch
                     return_dict['best_f1'] = val_score['f1']
                     best_model_weights = deepcopy(net.cpu().state_dict())
@@ -530,19 +530,19 @@ class BasicTrainer(ABC):
 
             # --------------- Validation stage end ---------------#
 
-            # check esv return dicts
-            if is_esv:
-                for esv_year in esv_years:
-                    if esv_year not in list(best_model_weights.keys()):
-                        print(f"Warning: No best model for year {esv_year}")
-                        best_model_weights[esv_year] = deepcopy(net.cpu().state_dict())
-                        net.to(self.device)
-
             if not self.scheduler is None:
                 if self.scheduler == 'ReduceLROnPlateau':
                     scheduler.step(val_loss_avg)
                 else:
                     scheduler.step()
+
+        # check esv return dicts
+        if is_esv:
+            for esv_year in esv_years:
+                if esv_year not in list(best_model_weights.keys()):
+                    print(f"Warning: No best model for year {esv_year}")
+                    best_model_weights[esv_year] = deepcopy(net.cpu().state_dict())
+                    net.to(self.device)
 
         return net.cpu().state_dict(), best_model_weights, return_dict
 
