@@ -54,7 +54,7 @@ class NIERDataset(Dataset):
         :param data_type: train or test set
         :param pca_dim: PCA 차원 수
         :param lag: 예측에 사용할 lag 길이
-        :param numeric_type: 예측장 정보 종류 (WRF, CMAQ, Numeric(WRF+CMAQ))
+        :param numeric_type: 예측장 정보 종류. 'Numeric' 으로 고정 (WRF, CMAQ, Numeric(WRF+CMAQ))
         :param numeric_data_handling: mean 이면 하루 평균 값, single 이면 15시의 데이터 포인트, normal 이면 모든 포인트(하루 4포인트)
         :param horizon: 예측하려는 horizon
         :param max_lag: 최대 lag 길이 (3일 ~ 1일)

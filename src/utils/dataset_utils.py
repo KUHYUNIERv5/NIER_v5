@@ -13,8 +13,8 @@ pd.set_option('display.max_rows', 100)
 
 inverse_transform = lambda scaled, var, mean : scaled * var + mean
 
-def db_to_pkl(get_data=False, root_dir='./db_save'):
-    yaml_file = read_yaml("../../static.yaml")
+def db_to_pkl(get_data=False, root_dir='./db_save', yaml_dir="../../static.yaml"):
+    yaml_file = read_yaml(yaml_dir)
     db_master = yaml_file['DBMaster'] # for security, we detached master sql address (Junhyung)
     if get_data:
         engine = create_engine(db_master,

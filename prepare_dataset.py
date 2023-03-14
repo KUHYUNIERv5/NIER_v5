@@ -71,13 +71,14 @@ if __name__ == '__main__':
         test_period_version='tmp',
         seed=999,
         preprocess_root='../dataset/d5_phase2',
-        root_dir="/workspace/local/src/datagen/ver_4th/db_save",
+        root_dir="/workspace/data/NIERDataset/R5_phase2/data_folder",
         save_processed_data=True,
         run_pca=True,
         predict_region='R4_62',
         representative_region='R4_62',
         remove_region=0,
-        rmgroup_file='./data_folder/height_region_list.csv'
+        rmgroup_file='./data_folder/height_region_list.csv',
+        yaml_dir='./static.yaml'
     )
 
     for region in region_lists:

@@ -6,13 +6,13 @@
 # @`File`      : basic_trainer_dev2.py
 # @Software  : PyCharm
 
-from typing import Union
-from collections.abc import Iterable
-from abc import ABC, abstractmethod
+from typing import Union, List, Iterable
+# from collections.abc import Iterable
+from abc import ABC
+import os
 
 import torch
 from torch.utils.data import DataLoader, Dataset, SubsetRandomSampler
-import torch.nn.functional as F
 from torch import optim, nn
 
 from sklearn.model_selection import KFold
@@ -20,13 +20,12 @@ from sklearn.metrics import confusion_matrix
 
 from copy import deepcopy
 import logging
-from tqdm.auto import tqdm
 import numpy as np
 
-from ..utils import AverageMeter, easycat, set_random_seed, concatenate
+from ..utils import AverageMeter, set_random_seed, concatenate
 from ..models import DoubleInceptionModel, SingleInceptionModel, SingleInceptionCRNN, DoubleInceptionCRNN, \
     DoubleInceptionModel_v2, SingleInceptionModel_v2, SingleInceptionCRNN_v2, \
-    DoubleInceptionCRNN_v2  # , Transformer, BERT
+    DoubleInceptionCRNN_v2
 
 
 class BasicTrainer(ABC):
@@ -35,8 +34,27 @@ class BasicTrainer(ABC):
     def __init__(self, pm_type: str, model_name: str = 'CNN', model_type: str = "single", model_ver: str = 'v2',
                  scheduler: str = "MultiStepLR", lr_milestones=None, optimizer_name: str = "SGD",
                  objective_name: str = "CrossEntropyLoss", n_epochs: int = 1, dropout: float = 0.,
-                 device: str = "cpu", batch_first: bool = True, name: str = "NIER_R5",
-                 is_reg=False, return_best=False, log_path: str = "../../log", seed: int = 999, log_flag: bool = True):
+                 device: str = "cpu", name: str = "NIER_R5", is_reg=False, log_path: str = "../../log",
+                 seed: int = 999, log_flag: bool = True):
+        """
+        Trainer parameters
+        @param pm_type: pm type
+        @param model_name: name of model ("CNN or RNN")
+        @param model_type: means the number of layers ("double" or "single")
+        @param model_ver:
+        @param scheduler:
+        @param lr_milestones:
+        @param optimizer_name:
+        @param objective_name:
+        @param n_epochs:
+        @param dropout:
+        @param device:
+        @param name:
+        @param is_reg:
+        @param log_path:
+        @param seed:
+        @param log_flag:
+        """
         super(BasicTrainer).__init__()
         if lr_milestones is None:
             lr_milestones = [40]
@@ -55,11 +73,12 @@ class BasicTrainer(ABC):
         self.n_epochs = n_epochs
         self.dropout = dropout
         self.device = device
-        self.batch_first = batch_first
-        self.return_best = return_best
         self.optimizer = None
         self.seed = seed
         self.objective = None
+        if not os.path.exists(log_path):
+            os.mkdir(log_path)
+
         self.log_path = f'{log_path}/{name}.log'
         self.log_flag = log_flag
 
@@ -130,7 +149,7 @@ class BasicTrainer(ABC):
             raise AttributeError(f"{optimizer_name} is not a valid attribute in torch.optim.")
 
     def objective_setup(self, objective_name=None, **objective_args):
-        if self.is_reg and objective_name is None:
+        if self.is_reg:
             self.objective = nn.MSELoss(**objective_args)
         elif not self.is_reg:
             self.objective = nn.CrossEntropyLoss(**objective_args)
@@ -271,7 +290,19 @@ class BasicTrainer(ABC):
 
     def esv_train(self, train_set: Dataset, valid_sets: Iterable[Dataset], esv_years: Iterable[int],
                   model_args: dict, optimizer_args: dict, objective_args: dict, param_args: dict, batch_size=64, ):
-        assert self.model_ver is 'v2', f'model version except for v2 is not acceptable. current: {self.model_ver}'
+        """
+        esv version training function
+        @param train_set: trainset to train model with
+        @param valid_sets: validataion sets of esv years
+        @param esv_years: list of years indicating the validation year in esv validation
+        @param model_args: arguments of the model
+        @param optimizer_args: arguments of the optimizer
+        @param objective_args: arguments of the objective
+        @param param_args: arguments including parameters for the training, etc.
+        @param batch_size: size of batches in loaders
+        @return:
+        """
+        assert self.model_ver == 'v2', f'model version except for v2 is not acceptable. current: {self.model_ver}'
         self.lag = model_args['lag']
         self.horizon = param_args['horizon']
         self.sampling = param_args['sampling']
@@ -288,6 +319,7 @@ class BasicTrainer(ABC):
             self.logger.info(setting)
 
         mean, scale, thresholds = train_set.mean, train_set.scale, train_set.threshold_dict[self.pm_type]
+        net = None
 
         if self.model_name == 'CNN':
             if self.model_type == 'single':
@@ -317,12 +349,8 @@ class BasicTrainer(ABC):
 
         _, best_model_weights, return_dict = self.train(train_loader, valid_loaders, scale, mean, thresholds, net,
                                                         optimizer_args=optimizer_args, objective_args=objective_args,
-                                                        esv_years=esv_years)
+                                                        is_esv=True, esv_years=esv_years)
 
-        # model_weights, best_model_weights, return_dict = self.train(train_loader, val_loader, scale, mean,
-        #                                                             thresholds, net,
-        #                                                             optimizer_args=optimizer_args,
-        #                                                             objective_args=objective_args)
         return net, best_model_weights, return_dict
 
     def _thresholding(self, array, thresholds):
@@ -333,36 +361,26 @@ class BasicTrainer(ABC):
         return y_cls
 
     def train(self, trainloader: DataLoader, validloader: Union[DataLoader, Iterable[DataLoader]], scale: float,
-              mean: float, thresholds: list,
-              net: nn.Module, optimizer_args: dict, objective_args: dict, esv_years=None):
+              mean: float, thresholds: list, net: nn.Module, optimizer_args: dict, objective_args: dict,
+              is_esv: bool = False, esv_years=None):
         """
         Implement train method that trains the given network using the train_set of dataset.
-        :return: Trained net, best network state_dict
+
+        @param trainloader: loader with training set
+        @param validloader: loader or loaders with validataion set
+        @param scale: scale vector for reversing standardscale
+        @param mean: mean vector for reversing standardscale
+        @param thresholds: thresholds for classification (pm thresholds)
+        @param net: neural nets to train
+        @param optimizer_args: optimizer arguments
+        @param objective_args: object function arguments
+        @param is_esv: flag for the esv or not
+        @param esv_years: list of years for esv
+        @return: Trained net, best network state_dict, results of validation sets
         """
-        validation_obj = dict(
-            val_preds={},
-            val_labels={},
-            val_losses={},
-            val_orig_preds={}
-        )
-        is_esv = False
-        if type(validloader) is list:
-            is_esv = True
-            best_scores = {}
-            for esv_year in esv_years:
-                best_scores[esv_year] = -1111
-
-        self.setup(net.parameters(), optimizer_args, objective_args)
-        net.to(self.device)
-
-        scheduler = None
-
-        if not self.scheduler is None:
-            scheduler = getattr(optim.lr_scheduler, self.scheduler)(self.optimizer, self.lr_milestones)
-
-        best_loss = -1111
 
         best_model_weights = None
+        best_loss = -1111
         return_dict = dict(
             train_score_list=[],
             val_score_list=[],
@@ -375,12 +393,16 @@ class BasicTrainer(ABC):
             y_label=None,  # label lists
             best_orig_pred=None  # original prediction lists
         )
+
         if is_esv:
+            best_losses = {}
+            for esv_year in esv_years:
+                best_losses[esv_year] = -1111
+
+            best_model_weights = {}
             return_dict = dict(
                 train_score_list=[],
-                val_score_list={},
                 train_loss_list=[],
-                val_loss_list={},
                 best_f1s={},
                 best_epochs={},
                 best_scores={},
@@ -389,10 +411,16 @@ class BasicTrainer(ABC):
                 best_orig_preds={}  # original prediction lists
             )
 
+        self.setup(net.parameters(), optimizer_args, objective_args)
+        net.to(self.device)
+
+        scheduler = None
+        if not self.scheduler is None:
+            scheduler = getattr(optim.lr_scheduler, self.scheduler)(self.optimizer, self.lr_milestones)
         # self.logger.info(f"Device {self.device} start training")
 
         for epoch in range(self.n_epochs):
-            # Train stage
+            # --------------- Train stage ---------------#
             train_orig_pred, train_pred, train_label, train_loss = self._run_epoch(trainloader, net, scale, mean)
 
             if self.is_reg:
@@ -405,12 +433,14 @@ class BasicTrainer(ABC):
             train_score = self._evaluation(train_label_score, train_pred_score)
 
             if self.is_reg:
+                # print(self.objective)
                 train_score['RMSE'] = np.sqrt(train_loss)
 
             return_dict['train_score_list'].append(train_score)
             return_dict['train_loss_list'].append(train_loss)
+            # --------------- Train stage end ---------------#
 
-            # validation stage
+            # --------------- Validation stage ---------------#
             if is_esv:
                 msg_obj = {
                     'val_loss': {},
@@ -419,16 +449,9 @@ class BasicTrainer(ABC):
 
                 val_loss_avg = 0
 
-                for esv_year in esv_years:
-                    return_dict['val_score_list'][esv_year] = []
-                    return_dict['val_loss_list'][esv_year] = []
-
                 for vl, esv_year in zip(validloader, esv_years):
                     val_orig_pred, val_pred, val_label, val_loss = self._run_epoch(vl, net, scale, mean, is_train=False)
-                    validation_obj['val_losses'][esv_year] = val_loss
-                    validation_obj['val_preds'][esv_year] = val_pred
-                    validation_obj['val_labels'][esv_year] = val_label
-                    validation_obj['val_orig_preds'][esv_year] = val_orig_pred
+                    val_loss_avg += val_loss
 
                     if self.is_reg:
                         val_pred_score = self._thresholding(val_pred, thresholds)
@@ -442,14 +465,22 @@ class BasicTrainer(ABC):
                     if self.is_reg:
                         val_score['RMSE'] = np.sqrt(val_loss)
 
-                    return_dict['val_score_list'][esv_year].append(val_score)
-                    return_dict['val_loss_list'][esv_year].append(val_loss)
+                    msg_obj['val_loss'][esv_year] = val_loss
+                    msg_obj['val_score'][esv_year] = val_score['f1']
 
-                    val_loss_avg += val_loss
-
-
-                    msg_obj['val_loss']['esv_year'] = val_loss
-                    msg_obj['val_score']['esv_year'] = val_score['f1']
+                    if val_score['f1'] > best_losses[esv_year] and epoch > 0:
+                        best_losses[esv_year] = val_score['f1']
+                        return_dict['y_labels'][esv_year] = val_label
+                        return_dict['best_preds'][esv_year] = val_pred
+                        return_dict['best_orig_preds'][esv_year] = val_orig_pred
+                        return_dict['best_scores'][esv_year] = val_score
+                        return_dict['best_epochs'][esv_year] = epoch
+                        return_dict['best_f1s'][esv_year] = val_score['f1']
+                        best_model_weights[esv_year] = deepcopy(net.cpu().state_dict())
+                        net.to(self.device)
+                        message = f'Update Best model with esv {esv_year} in epoch {epoch}/{self.n_epochs}'
+                        if self.log_flag:
+                            self.logger.info(message)
 
                 val_loss_avg = val_loss_avg / len(esv_years)
 
@@ -460,7 +491,7 @@ class BasicTrainer(ABC):
 
             else:
                 val_orig_pred, val_pred, val_label, val_loss = self._run_epoch(validloader, net, scale, mean,
-                                                                           is_train=False)
+                                                                               is_train=False)
 
                 val_loss_avg = val_loss.avg
 
@@ -483,19 +514,29 @@ class BasicTrainer(ABC):
                 if self.log_flag:
                     self.logger.info(message)
 
-            if val_score['f1'] > best_loss and epoch > 0:
-                best_loss = val_score['f1']
-                return_dict['y_label'] = val_label
-                return_dict['best_pred'] = val_pred
-                return_dict['best_orig_pred'] = val_orig_pred
-                return_dict['best_score'] = val_score
-                return_dict['best_epoch'] = epoch
-                return_dict['best_f1'] = val_score['f1']
-                best_model_weights = deepcopy(net.cpu().state_dict())
-                net.to(self.device)
-                message = f'Update Best models in epoch {epoch}/{self.n_epochs}'
-                if self.log_flag:
-                    self.logger.info(message)
+                if val_score['f1'] > best_loss and epoch > 0:
+                    best_loss = val_score['f1']
+                    return_dict['y_label'] = val_label
+                    return_dict['best_pred'] = val_pred
+                    return_dict['best_orig_pred'] = val_orig_pred
+                    return_dict['best_score'] = val_score
+                    return_dict['best_epoch'] = epoch
+                    return_dict['best_f1'] = val_score['f1']
+                    best_model_weights = deepcopy(net.cpu().state_dict())
+                    net.to(self.device)
+                    message = f'Update Best models in epoch {epoch}/{self.n_epochs}'
+                    if self.log_flag:
+                        self.logger.info(message)
+
+            # --------------- Validation stage end ---------------#
+
+            # check esv return dicts
+            if is_esv:
+                for esv_year in esv_years:
+                    if esv_year not in list(best_model_weights.keys()):
+                        print(f"Warning: No best model for year {esv_year}")
+                        best_model_weights[esv_year] = deepcopy(net.cpu().state_dict())
+                        net.to(self.device)
 
             if not self.scheduler is None:
                 if self.scheduler == 'ReduceLROnPlateau':

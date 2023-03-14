@@ -20,6 +20,11 @@ import yaml
 from .vector_utils import all_equal, concatenate
 from sklearn.model_selection import ParameterGrid
 
+def merge_two_dicts(x, y):
+    z = x.copy()   # start with keys and values of x
+    z.update(y)    # modifies z with keys and values of y
+    return z
+
 def get_best_hyperparam(predict_region, settings):
     representatives = []
     for group in settings['region_groups']:
