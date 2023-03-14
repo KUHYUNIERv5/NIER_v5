@@ -23,7 +23,7 @@ class NIERDataset(Dataset):
                  predict_pm,
                  shuffle: bool = False,
                  sampling: str = 'normal',
-                 data_path: str = '../../dataset/d5',
+                 data_path: str = '../../dataset/d5_phase2',
                  data_type: str = 'train',
                  pca_dim: dict = None,
                  lag: int = 1,
@@ -37,12 +37,13 @@ class NIERDataset(Dataset):
                  interval: int = 1,
                  seed: int = 999,
                  serial_y: bool = False,
-                 flatten: bool = True,
+                 # flatten: bool = True,
                  period_version: str = 'p1',
                  test_period_version: str = 'tmp',
+                 esv_year: int = 2021, # early stopping validation year
                  co2_load: bool = False,
                  rm_region: int = 0,
-                 exp_name: Any = None):
+                 exp_name: str = None):
         """
         NIER Dataset 생성을 위한 class
         :param predict_location_id: 예측하려는 지역 id (R4_59~R4_77)
@@ -53,7 +54,7 @@ class NIERDataset(Dataset):
         :param data_type: train or test set
         :param pca_dim: PCA 차원 수
         :param lag: 예측에 사용할 lag 길이
-        :param numeric_type: 예측장 정보 종류 (WRF, CMAQ, Numeric(WRF+CMAQ))
+        :param numeric_type: 예측장 정보 종류. 'Numeric' 으로 고정 (WRF, CMAQ, Numeric(WRF+CMAQ))
         :param numeric_data_handling: mean 이면 하루 평균 값, single 이면 15시의 데이터 포인트, normal 이면 모든 포인트(하루 4포인트)
         :param horizon: 예측하려는 horizon
         :param max_lag: 최대 lag 길이 (3일 ~ 1일)
@@ -64,6 +65,7 @@ class NIERDataset(Dataset):
         :param seed: random seed
         :param serial_y: sequential 예측 여부 (True면 horizon 레이블 값, False면 해당 horizon의 레이블 반환)
         :rm_region: 제거 지역 그룹 개수, None 이면 제거 지역 고려 X
+        :exp_name: 데이터 파일 명
         """
         super(NIERDataset, self).__init__()
         if pca_dim is None:
@@ -74,8 +76,31 @@ class NIERDataset(Dataset):
                 cmaq=512,
                 numeric=512
             )
+        esv_years = dict(
+            p1=[2017, 2018, 2019, 2020, 2021],
+            p2=[2018, 2019, 2020, 2021],
+            p3=[2019, 2020, 2021],
+            p4=[2020, 2021],
+        )
+        assert esv_year in esv_years[period_version], f'bad esv year. {esv_year} not included in {esv_years[period_version]}'
         assert numeric_type in ['wrf', 'cmaq', 'numeric'], f'bad numeric type: {numeric_type}'
         assert numeric_scenario in [0, 1, 2, 3, 4], f'bad scenario: {numeric_scenario}'
+
+        end_date = 20211231
+        if test_period_version == 'v1':
+            end_date = 20201231
+        train_periods = dict(
+            p1=[20170301, end_date],
+            p2=[20180101, end_date],
+            p3=[20190101, end_date],
+            p4=[20200101, end_date],
+        )
+        test_periods = dict(
+            v1=[20210101, 20211231],
+            v2=[20220101, 20221231],
+            tmp=[20211201, 20211231]
+        )
+
         self.predict_location_id = predict_location_id
         self.predict_pm = predict_pm
         self.sampling = sampling if data_type == 'train' else 'normal'
@@ -94,17 +119,22 @@ class NIERDataset(Dataset):
         self.shuffle = shuffle
         self.seed = seed
         self.serial_y = serial_y
-        self.flatten = flatten
+        # self.flatten = flatten
         self.co2_load = co2_load
         self.rm_region = rm_region
-        self.exp_name = exp_name # load data할 때 사용할 이름
+        self.exp_name = exp_name  # load data할 때 사용할 이름
+        self.train_period = train_periods[period_version]
+        self.test_period = test_periods[test_period_version]
+        self.esv_year = esv_year
+        self.is_validation = True if self.data_type == 'valid' else False
+        if self.data_type == 'valid':
+            self.data_type = 'train'
 
         self.threshold_dict = dict(
             PM10=[30, 80, 150],
             PM25=[15, 35, 75]
         )
-        
-        
+
         # if rm_region != 0:
         #     self.rm_regions, self.rm_regions_pkl_name = self.get_rm_regions(predict_location_id, rm_region)
         # else:
@@ -129,16 +159,17 @@ class NIERDataset(Dataset):
     #                     elif rm_region == 3:
     #                         rm_regions = line[2].split(',')+line[3].split(',')+line[4].split(',')
     #                     rm_regions.sort()
-                
+
     #         return rm_regions, "-".join(rm_regions)
 
     def __read_data__(self):
-        start_year = str(self.start_date)[2:4]
-        test_year = str(self.until_date)[2:4]
-        
-        
+        # start_year = str(self.train_period[0])[2:4]
+        # test_year = str(self.train_period[1])[2:4]
+        start_year = '19'
+        test_year = '21'
+
         whole_data = load_data(os.path.join(self.data_path, f'{self.exp_name}.pkl'))
-        
+
         # if self.rm_region != 0:
         #     # print(self.rm_regions, "are removed")
         #     whole_data = load_data(os.path.join(self.data_path, f'{self.rm_regions_pkl_name}.pkl'))
@@ -155,10 +186,27 @@ class NIERDataset(Dataset):
             self.data_type].reset_index()
         self.dec_X = self.dec_X.set_index(['RAW_DATE'])
 
-        if self.co2_load:
-            co2_data = load_data(os.path.join(self.data_path, f'co2_{start_year}_to_{test_year}.pkl'))
-            co2_X = co2_data[self.data_type][self.predict_location_id]
-            self.obs_X = pd.concat([self.obs_X, co2_X], axis=1)
+        if self.is_validation:
+            start_date, end_date = int(str(self.esv_year) + "0101"), int(str(self.esv_year) + "1231")
+            # print(start_date, end_date)
+            # print(self.obs_X)
+            self.obs_X = self.obs_X.loc[(start_date):(end_date)]
+            self.fnl_X = self.fnl_X.loc[(start_date):(end_date)]
+            self.dec_X = self.dec_X.loc[(start_date):(end_date)]
+            self.y_ = self.y_.loc[(start_date):(end_date)]
+
+            # print(len(self.obs_X), len(self.fnl_X), len(self.dec_X), len(self.y_))
+
+            if self.co2_load:
+                co2_data = load_data(os.path.join(self.data_path, f'co2_{start_year}_to_{test_year}.pkl'))
+                co2_X = co2_data[self.data_type][self.predict_location_id]
+                co2_X = co2_X.loc[(start_date):(end_date)]
+                self.obs_X = pd.concat([self.obs_X, co2_X], axis=1)
+
+        elif self.co2_load:
+                co2_data = load_data(os.path.join(self.data_path, f'co2_{start_year}_to_{test_year}.pkl'))
+                co2_X = co2_data[self.data_type][self.predict_location_id]
+                self.obs_X = pd.concat([self.obs_X, co2_X], axis=1)
 
         self.max_length = (len(self.obs_X) - 3 - 4 * (
                 self.max_lag + self.max_horizon)) // 4 + 1  # (len(self.obs_X) - 4 * ((self.max_lag - 1) + (self.max_horizon))) // 4
