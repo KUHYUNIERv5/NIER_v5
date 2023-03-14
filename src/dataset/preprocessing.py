@@ -35,8 +35,7 @@ class MakeNIERDataset(ABC):
     def __init__(self, reset_db=False, period_version='p1', test_period_version='v2', seed=999, reset_predata=False,
                  preprocess_root='../dataset/d5_phase2', root_dir="/workspace/local/src/datagen/ver_4th/db_save",
                  save_processed_data=True, run_pca=True, predict_region='R4_62', representative_region='R4_62',
-                 remove_region=0,
-                 rmgroup_file='../NIER_v5/data_folder/height_region_list.csv'):
+                 remove_region=0, yaml_dir='', rmgroup_file='../NIER_v5/data_folder/height_region_list.csv'):
         super(MakeNIERDataset, self).__init__()
         end_date = 20211231
         if test_period_version == 'v1':
@@ -46,12 +45,15 @@ class MakeNIERDataset(ABC):
             p2=[20180101, end_date],
             p3=[20190101, end_date],
             p4=[20200101, end_date],
+            p5=[20170101, 20191231],
+            p6=[20200101, 20211231]
         )
         test_periods = dict(
             v1=[20210101, 20211231],
             v2=[20220101, 20221231],
             tmp=[20211201, 20211231]
         )
+        self.yaml_dir = yaml_dir
         self.reset_predata = reset_predata
         self.reset_db = reset_db
         self.preprocess_root = preprocess_root
@@ -275,7 +277,8 @@ class MakeNIERDataset(ABC):
 
     def _select_by_date(self):
         obs_df, fnl_df, wrf_df, cmaq_df, cwdb_df, ewkr_df = db_to_pkl(get_data=self.reset_db,
-                                                                      root_dir=self.root_dir)
+                                                                      root_dir=self.root_dir,
+                                                                      yaml_dir=self.yaml_dir)
 
         ############## 날짜 튜닝 시 작업해야할 부분 ######################
 
