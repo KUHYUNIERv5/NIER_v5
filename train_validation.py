@@ -230,8 +230,8 @@ def main(device, pm_type, horizon, predict_region, representative_region, period
             if not os.path.exists(model_dir):
                 os.mkdir(model_dir)
 
-            save_data(results, os.path.join(root_dir, 'results'), f'{setting_id}.pkl')
-            save_data(model_weights, os.path.join(root_dir, 'models'), f'{setting_id}.pkl')
+            save_data(results, result_dir, f'{setting_id}.pkl')
+            save_data(model_weights, model_dir, f'{setting_id}.pkl')
 
             ids = dict(
                 id=setting_id,
