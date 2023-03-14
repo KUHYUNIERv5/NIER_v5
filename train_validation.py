@@ -11,7 +11,7 @@ from src.dataset import NIERDataset
 from src.utils import save_data, read_yaml, load_data, get_region_grid, get_best_hyperparam, merge_two_dicts
 from sklearn.model_selection import ParameterGrid
 
-from itertools import product
+from itertools import product, chain
 import torch.multiprocessing as mp
 import torch
 from tqdm.auto import tqdm
@@ -19,52 +19,44 @@ import numpy as np
 import uuid
 import argparse
 import os
+import pandas as pd
 
 
-def arg_config(predict_region, pm_type='PM10'):  # ['PM10', 'PM25'] # [3,4,5,6]
-    global data_dir, numeric_scenario, numeric_type, numeric_data_handling, model_ver, seed, lr, dropout, pca_dim
-    # top priority hyperparams
-    co2_load = False
-
+def arg_config(debug_mode=False):  # ['PM10', 'PM25'] # [3,4,5,6]
+    global numeric_scenario, numeric_type, numeric_data_handling, model_ver, seed, lr, dropout, pca_dim
     # fixed params
-    root_dir = '/workspace/local/R5_phase2_saves/'
-    data_dir = '../dataset/d5_phase2'  # setting 필요'../../dataset/d5_phase2'
     numeric_scenario = 4
     numeric_type = 'numeric'
     numeric_data_handling = 'normal'
     model_ver = 'v2'
-    n_epochs = 1  # 50
+    n_epochs = 2 if debug_mode else 50
     batch_size = 128
     lr = 0.001
     dropout = .1
-
-    if numeric_scenario == 0 and model_ver == 'v1':
-        num_setting = 'r4'
-    elif numeric_scenario == 3:
-        num_setting = 'r5'
-    else:
-        num_setting = 'r6'
-
+    pca_dim = dict(  # 건드리면 안됨
+        obs=256,
+        fnl=512,
+        wrf=128,
+        cmaq=512,
+        numeric=512
+    )
     seed = 999
 
-    # outer hyperparams
-    settings = read_yaml('./data_folder/settings.yaml')
-    grids = get_region_grid(predict_region, settings, pm_type.lower())
-    data_grid = dict(
-        sampling=['normal', 'oversampling'],
-        lag=[1, 2, 3, 4, 5, 6, 7]
-    )
-    data_grids = list(ParameterGrid(data_grid))
+    if debug_mode:
+        data_grid = dict(
+            sampling=['normal'],
+            lag=[1, 7]
+        )
+    else:
+        data_grid = dict(
+            sampling=['normal', 'oversampling'],
+            lag=[1, 2, 3, 4, 5, 6, 7]
+        )
+    grids = list(ParameterGrid(data_grid))
+    return n_epochs, batch_size, grids
 
-    li = []
-    for grid in grids:
-        for data_grid in data_grids:
-            li.append(merge_two_dicts(grid, data_grid))
-    grids = list(map(dict, set(tuple(sorted(sub.items())) for sub in li)))
 
-    return n_epochs, batch_size, co2_load, grids, settings
-
-def prepare_trainset(co2_load, predict_region, pm_type, horizon, period_version, rm_region, esv_years, exp_name,
+def prepare_trainset(predict_region, pm_type, horizon, period_version, rm_region, esv_years, exp_name,
                      sampling, lag, data_dir, pca_dim, numeric_type, numeric_data_handling='normal',
                      numeric_scenario=4, seed=999):
     dataset_args = dict(
@@ -101,20 +93,21 @@ def prepare_trainset(co2_load, predict_region, pm_type, horizon, period_version,
         dataset_args['esv_year'] = esv_year
         validset = NIERDataset(**dataset_args)
         validsets.append(validset)
+    dataset_args['data_type'] = 'test'
+    testset = NIERDataset(**dataset_args)
 
     if co2_load:
         obs_dim = dataset_args['pca_dim']['obs'] + 3
     else:
         obs_dim = dataset_args['pca_dim']['obs']
 
-    return trainset, validsets, obs_dim
+    return trainset, validsets, testset, obs_dim
 
 
-def run_trainer(train_set, valid_sets, predict_region, pm_type, horizon, obs_dim, esv_years, sampling, lag, is_reg,
+def run_trainer(train_set, valid_sets, test_set, predict_region, pm_type, horizon, obs_dim, esv_years, sampling, lag,
+                is_reg,
                 model_name, model_type, n_epochs, dropout, device, optimizer_name="SGD",
                 objective_name="CrossEntropyLoss", numeric_type='numeric'):
-
-
     trainer_args = dict(
         pm_type=pm_type,
         model_name=model_name,
@@ -160,69 +153,69 @@ def run_trainer(train_set, valid_sets, predict_region, pm_type, horizon, obs_dim
         batch_size=64
     )
 
-    net, best_model_weights, return_dict = trainer.esv_train(train_set, valid_sets, esv_years, **train_val_dict)
+    net, best_model_weights, val_dict = trainer.esv_train(train_set, valid_sets, esv_years, **train_val_dict)
 
-    return net, best_model_weights, return_dict
+    test_dict = dict()
+    for esv_year in esv_years:
+        net.load_state_dict(best_model_weights[esv_year])
+        test_score, test_orig_pred, test_pred_score, test_label_score = trainer.test(test_set, net, 128,
+                                                                                     train_val_dict['optimizer_args'],
+                                                                                     train_val_dict['objective_args'])
+        test_dict[esv_year] = {
+            'test_result': test_score,
+            'test_orig_pred': test_orig_pred,
+            'test_pred_score': test_pred_score,
+            'test_label_score': test_label_score
+        }
+
+    return net, best_model_weights, val_dict, test_dict
 
 
-def main(device, pm_type, horizon, predict_region):
-    result_grid = []
-    model_grid = []
+def main(device, pm_type, horizon, predict_region, representative_region, period_version, rm_region, esv_years,
+         debug_mode=False):
+    id_list = []
 
-    n_epochs, batch_size, co2_load, grids, settings = arg_config(predict_region, pm_type)
+    n_epochs, batch_size, grids = arg_config(debug_mode)
 
-    for grid in tqdm(grids): # outer grid
-        representative_region = grid['representative_region']
-        period_version = grid['periods']
-        rm_region = grid['remove_regions']
-        esv_years = settings['esv_years'][period_version]
+    for grid in tqdm(grids):  # outer grid
         exp_name = os.path.join(predict_region,
                                 f'{predict_region}_{representative_region}_period_{period_version}_rmgroup_{rm_region}')
 
-        inner_grid = dict(
-            is_reg=[True, False],
-            model_name=['RNN', 'CNN'],
-            model_type=['single', 'double']
-        )
+        if debug_mode:
+            inner_grid = dict(
+                is_reg=[True],
+                model_name=['RNN'],
+                model_type=['single']
+            )
+        else:
+
+            inner_grid = dict(
+                is_reg=[True, False],
+                model_name=['RNN', 'CNN'],
+                model_type=['single', 'double']
+            )
         inner_grids = list(ParameterGrid(inner_grid))
 
-        train_set, valid_sets, obs_dim = prepare_trainset(co2_load, predict_region, pm_type, horizon,
-                                                          period_version, rm_region, esv_years, exp_name,
-                                                          grid['sampling'], grid['lag'], data_dir,
-                                                          pca_dim, numeric_type, seed=seed)
+        train_set, valid_sets, test_set, obs_dim = prepare_trainset(predict_region, pm_type, horizon,
+                                                                    period_version, rm_region, esv_years, exp_name,
+                                                                    grid['sampling'], grid['lag'], data_dir,
+                                                                    pca_dim, numeric_type, seed=seed)
 
         for inner_grid in inner_grids:
             run_type = 'regression' if inner_grid['is_reg'] else 'classification'
-            net, best_model_weights, return_dict = run_trainer(train_set, valid_sets, predict_region, pm_type,
-                                                               horizon, obs_dim, esv_years, grid['sampling'],
-                                                               grid['lag'], inner_grid['is_reg'],
-                                                               inner_grid['model_name'], inner_grid['model_type'],
-                                                               n_epochs, dropout, device)
+            net, best_model_weights, val_dict, test_dict = run_trainer(train_set, valid_sets, test_set, predict_region,
+                                                                       pm_type,
+                                                                       horizon, obs_dim, esv_years, grid['sampling'],
+                                                                       grid['lag'], inner_grid['is_reg'],
+                                                                       inner_grid['model_name'],
+                                                                       inner_grid['model_type'],
+                                                                       n_epochs, dropout, device)
             setting_id = uuid.uuid4()
 
-            settings = {
-                'id' : setting_id,
-                'hyperparams': dict(
-                    predict_region=predict_region,
-                    pm_type=pm_type,
-                    horizon=horizon,
-                    representative_region=representative_region,
-                    period_version=period_version,
-                    rm_region=rm_region,
-                    esv_years=esv_years,
-                    exp_name=exp_name,
-                    lag=grid['lag'],
-                    sampling=grid['sampling'],
-                    run_type=run_type,
-                    model=inner_grid['model_name'],
-                    model_type=inner_grid['model_type'],
-                ),
-
-                'results': dict(
-                    y_labels=return_dict['y_labels'],
-                    val_preds=return_dict['best_preds'],
-                    val_orig_preds=return_dict['']
-                )
+            results = {
+                'id': setting_id,
+                'val_results': val_dict,
+                'test_results': test_dict
             }
             model_weights = {
                 'id': setting_id,
@@ -230,62 +223,101 @@ def main(device, pm_type, horizon, predict_region):
                 'model_weights': best_model_weights
             }
 
+            result_dir = os.path.join(root_dir, 'results')
+            model_dir = os.path.join(root_dir, 'models')
+            if not os.path.exists(result_dir):
+                os.mkdir(result_dir)
+            if not os.path.exists(model_dir):
+                os.mkdir(model_dir)
+
+            save_data(results, os.path.join(root_dir, 'results'), f'{setting_id}.pkl')
+            save_data(model_weights, os.path.join(root_dir, 'models'), f'{setting_id}.pkl')
+
+            ids = dict(
+                id=setting_id,
+                predict_region=predict_region,
+                pm_type=pm_type,
+                horizon=horizon,
+                representative_region=representative_region,
+                period_version=period_version,
+                rm_region=rm_region,
+                esv_years=esv_years,
+                exp_name=exp_name,
+                lag=grid['lag'],
+                sampling=grid['sampling'],
+                run_type=run_type,
+                model=inner_grid['model_name'],
+                model_type=inner_grid['model_type'],
+            )
+            id_list.append(ids)
+    return id_list
+
+
+#     return result_grid, model_grid, id_list
+
 
 def multi_gpu(params):
     gpu_idx = semaphore.pop()
     device = 'cuda:%d' % gpu_idx if torch.cuda.is_available() else 'cpu'
     print(f'Process using {device}')
-    score_dict = dict()
-    model_dict = dict()
+    # result_grid, model_grid,
+    id_list = main(device, params['pm_type'], params['horizon'], params['predict_region'], \
+                   representative_region=params['representative_region'], \
+                   period_version=params['periods'], rm_region=params['remove_regions'], \
+                   esv_years=params['esv_years'], debug_mode=params['debug_mode'])
 
-    main(device, params['pm_type'], params['horizon'], params['predict_region'])
+    print(f'Process end {device}')
 
-    # run_info = dict(
-    #     region=dataset_args['predict_location_id'],
-    #     pm=dataset_args['predict_pm'],
-    #     horizon=dataset_args['horizon'],
-    #     lag=dataset_args['lag'],
-    #     sampling=dataset_args['sampling'],
-    #     num_scen=dataset_args['numeric_scenario'],
-    #     model_ver=trainer_dict['model_ver'],
-    #     model=trainer_dict['model_name'],
-    #     c_or_r=trainer_dict['is_reg'],
-    #     layer=trainer_dict['model_type'],
-    #     run_epoch=trainer_dict['n_epochs'],
-    #     best_epoch=return_dict['best_epoch'],  # 0부터 count
-    #     lr=lr,
-    # )
-    #
-    # score_dict[idx] = dict(
-    #     run_info=run_info,
-    #     best_valid_scores=return_dict['best_score'],
-    #     all_train_scores=return_dict['train_score_list'],
-    #     all_valid_scores=return_dict['val_score_list'],
-    #     train_loss=return_dict['train_loss_list'],
-    #     valid_loss=return_dict['val_loss_list'],
-    #     best_val_pred_orig=return_dict['best_orig_pred'],
-    #     best_val_pred=return_dict['best_pred'],
-    #     y_label=return_dict['y_label']
-    # )
+    semaphore.append(gpu_idx)
 
+    #     return_results_dict.extend(result_grid)
+    #     return_models_dict.extend(model_grid)
+    return_id_lists.append(id_list)
 
 
 if __name__ == "__main__":
+    global return_id_lists, root_dir, data_dir, co2_load
     parser = argparse.ArgumentParser(description='retrain arg')
 
     parser.add_argument('--debug', '-d', action="store_true")
     parser.add_argument('--region', help='input region', default='R4_62')
+    parser.add_argument('--co2', '-c', type=bool, help='load co2 data or not', default=False)
+    parser.add_argument('--root_dir', '-rd', type=str, help='directory to save results',
+                        default='/workspace/code/R5_phase2_saves')
+    parser.add_argument('--data_dir', '-dd', type=str, default='/workspace/data/NIERDataset/R5_phase2/data_folder')
 
     args = parser.parse_args()
 
-    gpu_idx_list = np.arange(8)
+    debug = args.debug
+    region = args.region
+    co2_load = args.co2
+    root_dir = args.root_dir
+    root_dir = os.path.join(root_dir, region)
+    if not os.path.exists(root_dir):
+        os.mkdir(root_dir)
+    data_dir = args.data_dir
+
     obj = {
-        'debug_mode': [args.debug],
-        'predict_region': [args.region],
-        'horizon': [3,4,5,6],
+        'debug_mode': [debug],
+        'predict_region': [region],
+        'horizon': [3, 4, 5, 6],
         'pm_type': ['PM10', 'PM25']
     }
-    param_list = list(ParameterGrid(obj))
+    obj_list = list(ParameterGrid(obj))
+
+    settings = read_yaml('./data_folder/settings.yaml')
+    param_list = []
+
+    for param in obj_list:
+        grids = get_region_grid(region, settings, param['pm_type'].lower())
+        for grid in grids:
+            for key in param.keys():
+                grid[key] = param[key]
+            grid['esv_years'] = settings['esv_years'][grid['periods']]
+            param_list.append(grid)
+
+    gpu_idx_list = [0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 4]
+
     manager = mp.Manager()
     semaphore = manager.list(gpu_idx_list)
     results_dict = manager.dict()
@@ -294,4 +326,8 @@ if __name__ == "__main__":
     pool.map(multi_gpu, param_list)
     pool.close()
     pool.join()
+
+    return_id_lists = list(chain(*return_id_lists))
+    return_id_lists = pd.DataFrame(return_id_lists)
+    return_id_lists.to_csv(os.path.join(root_dir, f'id_list.csv'), index=False)
 # period_version, rm_region, esv_years, sampling, lag, is_reg, model_name, model_type, exp_name, n_epochs, dropout, device,
