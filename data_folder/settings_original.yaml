@@ -70,8 +70,8 @@ best_hyperparams:
         - p2
         - p2
       R4_77:
+        - p4
         - p1
-        - p2
     pm25:
       R4_62:
         - p4
@@ -104,7 +104,7 @@ best_hyperparams:
         - 2
       R4_64:
         - 2
-        - 3
+        - 1
       R4_67:
         - 2
         - 3
@@ -121,7 +121,7 @@ best_hyperparams:
         - 3
         - 1
       R4_77:
-        - 0
+        - 1
         - 1
     pm25:
       R4_62:
@@ -131,7 +131,7 @@ best_hyperparams:
         - 1
         - 1
       R4_67:
-        - 2
+        - 0
         - 0
       R4_69:
         - 1
@@ -143,7 +143,7 @@ best_hyperparams:
         - 0
         - 1
       R4_76:
-        - 2
+        - 1
         - 2
       R4_77:
         - 2

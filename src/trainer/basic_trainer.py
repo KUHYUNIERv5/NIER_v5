@@ -12,7 +12,7 @@ from abc import ABC
 import os
 
 import torch
-from torch.utils.data import DataLoader, Dataset, SubsetRandomSampler
+from torch.utils.data import DataLoader, SubsetRandomSampler
 from torch import optim, nn
 
 from sklearn.model_selection import KFold
@@ -22,6 +22,7 @@ from copy import deepcopy
 import logging
 import numpy as np
 
+from ..dataset import NIERDataset
 from ..utils import AverageMeter, set_random_seed, concatenate
 from ..models import DoubleInceptionModel, SingleInceptionModel, SingleInceptionCRNN, DoubleInceptionCRNN, \
     DoubleInceptionModel_v2, SingleInceptionModel_v2, SingleInceptionCRNN_v2, \
@@ -161,38 +162,69 @@ class BasicTrainer(ABC):
         self.optimizer_setup(net_parameters, optimizer_name=self.optimizer_name, **optimizer_args)
         self.objective_setup(objective_name=self.objective_name, **objective_args)
 
-    def cross_validate(self, dataset: Dataset, model_args: dict, optimizer_args: dict, objective_args: dict,
+    def cross_validate(self, dataset: NIERDataset, model_args: dict, optimizer_args: dict, objective_args: dict,
                        param_args: dict, K=3, batch_size=64, ):
         splits = KFold(n_splits=K, shuffle=True, random_state=self.seed)
         self.lag = model_args['lag']
         self.horizon = param_args['horizon']
         self.sampling = param_args['sampling']
+        kfold_models = []
+        kfold_results = []
+
+        if dataset.numeric_scenario == 4 and dataset.horizon > 3 and self.model_ver == 'v2':
+            is_point_added = True
+        else:
+            is_point_added = False
 
         setting = f"Device {self.device}| Horizon: {self.horizon} | {self.model_name} | Layer: {self.model_type} | Reg: {self.is_reg} | Lag: {self.lag} | Sampl: {self.sampling}"
         if self.log_flag:
             self.logger.info(setting)
 
+        net = None
         mean, scale, thresholds = dataset.mean, dataset.scale, dataset.threshold_dict[self.pm_type]
         # kfold cross validation
         for fold, (train_idx, val_idx) in enumerate(splits.split(np.arange(len(dataset)))):
             cv_run = f"Device {self.device} | Horizon: {self.horizon} | Fold {fold + 1}"
             if self.log_flag:
                 self.logger.info(cv_run)
-            if self.model_name == 'CNN':
-                if self.model_type == 'single':
-                    net = SingleInceptionModel(dropout=self.dropout, reg=self.is_reg, **model_args)
-                elif self.model_type == 'double':
-                    net = DoubleInceptionModel(dropout=self.dropout, reg=self.is_reg, **model_args)
-                else:
-                    net = DoubleInceptionModel(dropout=self.dropout, reg=self.is_reg, **model_args)
+            if self.model_ver == 'v1':
+                if self.model_name == 'CNN':
+                    if self.model_type == 'single':
+                        net = SingleInceptionModel(dropout=self.dropout, reg=self.is_reg, **model_args)
+                    elif self.model_type == 'double':
+                        net = DoubleInceptionModel(dropout=self.dropout, reg=self.is_reg, **model_args)
+                    else:
+                        net = DoubleInceptionModel(dropout=self.dropout, reg=self.is_reg, **model_args)
 
-            if self.model_name == 'RNN':
-                if self.model_type == 'single':
-                    net = SingleInceptionCRNN(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU', **model_args)
-                elif self.model_type == 'double':
-                    net = DoubleInceptionCRNN(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU', **model_args)
-                else:
-                    net = DoubleInceptionCRNN(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU', **model_args)
+                if self.model_name == 'RNN':
+                    if self.model_type == 'single':
+                        net = SingleInceptionCRNN(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU', **model_args)
+                    elif self.model_type == 'double':
+                        net = DoubleInceptionCRNN(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU', **model_args)
+                    else:
+                        net = DoubleInceptionCRNN(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU', **model_args)
+            else:
+                if self.model_name == 'CNN':
+                    if self.model_type == 'single':
+                        net = SingleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added,
+                                                      **model_args)
+                    elif self.model_type == 'double':
+                        net = DoubleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added,
+                                                      **model_args)
+                    else:
+                        net = DoubleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added,
+                                                      **model_args)
+
+                if self.model_name == 'RNN':
+                    if self.model_type == 'single':
+                        net = SingleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
+                                                     added_point=is_point_added, **model_args)
+                    elif self.model_type == 'double':
+                        net = DoubleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
+                                                     added_point=is_point_added, **model_args)
+                    else:
+                        net = DoubleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
+                                                     added_point=is_point_added, **model_args)
 
             train_sampler = SubsetRandomSampler(train_idx)
             val_sampler = SubsetRandomSampler(val_idx)
@@ -200,28 +232,20 @@ class BasicTrainer(ABC):
             val_loader = DataLoader(dataset, batch_size=batch_size, sampler=val_sampler)
 
             model_weights, best_model_weights, return_dict = self.train(train_loader, val_loader, scale, mean,
-                                                                        thresholds, net,
-                                                                        optimizer_args=optimizer_args,
-                                                                        objective_args=objective_args)
+                                                                        thresholds, net, optimizer_args=optimizer_args,
+                                                                        objective_args=objective_args, is_esv=False)
 
             if best_model_weights is None:
                 best_model_weights = model_weights
+            kfold_models.append(best_model_weights)
+            kfold_results.append(return_dict)
 
-            self.history['kfold_results'].append(return_dict)
-            #             self.history['model_list'].append(model_weights)
-            self.history['best_model_list'].append(best_model_weights)
+        f1_list = [result['best_f1'] for result in kfold_results]
+        val_f1_score = np.mean(f1_list)
 
-        best_f1_list = [result['best_f1'] for result in self.history['kfold_results']]
-        best_fold_idx = np.argmax(best_f1_list)
-        self.history['best_fold_idx'] = best_fold_idx
-        # print(best_fold_idx, np.max(best_f1_list), best_f1_list )
-        # print(len(self.history['best_model_list']))
+        return val_f1_score, kfold_results
 
-        return net, self.history['best_model_list'], self.history['kfold_results']
-        # return net, self.history['model_list'][best_fold_idx], self.history['best_model_list'][best_fold_idx], \
-        #        self.history['kfold_results'][best_fold_idx]
-
-    def single_train(self, train_set: Dataset, valid_set: Dataset, model_args: dict,
+    def single_train(self, train_set: NIERDataset, valid_set: NIERDataset, model_args: dict,
                      optimizer_args: dict, objective_args: dict, param_args: dict, batch_size=64, ):
         self.lag = model_args['lag']
         self.horizon = param_args['horizon']
@@ -288,7 +312,7 @@ class BasicTrainer(ABC):
                                                                     objective_args=objective_args)
         return net, model_weights, best_model_weights, return_dict
 
-    def esv_train(self, train_set: Dataset, valid_sets: Iterable[Dataset], esv_years: Iterable[int],
+    def esv_train(self, train_set: NIERDataset, valid_sets: Iterable[NIERDataset], esv_years: Iterable[int],
                   model_args: dict, optimizer_args: dict, objective_args: dict, param_args: dict, batch_size=64, ):
         """
         esv version training function
@@ -396,13 +420,12 @@ class BasicTrainer(ABC):
 
         if is_esv:
             best_losses = {}
-            for esv_year in esv_years:
-                best_losses[esv_year] = -1111
-
             best_model_weights = {}
             return_dict = dict(
                 train_score_list=[],
                 train_loss_list=[],
+                val_loss_list={},
+                val_score_list={},
                 best_f1s={},
                 best_epochs={},
                 best_results={},
@@ -410,6 +433,10 @@ class BasicTrainer(ABC):
                 y_labels={},  # label lists
                 best_orig_preds={}  # original prediction lists
             )
+            for esv_year in esv_years:
+                best_losses[esv_year] = -1111
+                return_dict['val_loss_list'][esv_year] = []
+                return_dict['val_score_list'][esv_year] = []
 
         self.setup(net.parameters(), optimizer_args, objective_args)
         net.to(self.device)
@@ -467,6 +494,8 @@ class BasicTrainer(ABC):
 
                     msg_obj['val_loss'][esv_year] = val_loss
                     msg_obj['val_score'][esv_year] = val_score['f1']
+                    return_dict['val_loss_list'][esv_year].append(val_loss)
+                    return_dict['val_score_list'][esv_year].append(val_score['f1'])
 
                     if val_score['f1'] > best_losses[esv_year] and epoch > 0:
                         best_losses[esv_year] = val_score['f1']
@@ -493,7 +522,7 @@ class BasicTrainer(ABC):
                 val_orig_pred, val_pred, val_label, val_loss = self._run_epoch(validloader, net, scale, mean,
                                                                                is_train=False)
 
-                val_loss_avg = val_loss.avg
+                # val_loss_avg = val_loss
 
                 if self.is_reg:
                     val_pred_score = self._thresholding(val_pred, thresholds)
@@ -532,7 +561,7 @@ class BasicTrainer(ABC):
 
             if not self.scheduler is None:
                 if self.scheduler == 'ReduceLROnPlateau':
-                    scheduler.step(val_loss_avg)
+                    scheduler.step(val_loss)
                 else:
                     scheduler.step()
 
@@ -600,7 +629,7 @@ class BasicTrainer(ABC):
 
         return original_pred_list, pred_list, y_list, loss_.avg
 
-    def test(self, testset: Dataset, net, batch_size, optimizer_args: dict = None, objective_args: dict = None):
+    def test(self, testset: NIERDataset, net, batch_size, optimizer_args: dict = None, objective_args: dict = None):
         """
         Implement test method that evaluates the test_set of dataset on the given network.
         """

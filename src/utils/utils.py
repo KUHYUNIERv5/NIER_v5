@@ -19,6 +19,16 @@ import yaml
 
 from .vector_utils import all_equal, concatenate
 from sklearn.model_selection import ParameterGrid
+from pathlib import Path
+
+def rmdir(directory):
+    directory = Path(directory)
+    for item in directory.iterdir():
+        if item.is_dir():
+            rmdir(item)
+        else:
+            item.unlink()
+    directory.rmdir()
 
 def merge_two_dicts(x, y):
     z = x.copy()   # start with keys and values of x

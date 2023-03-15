@@ -8,19 +8,19 @@
 
 from src.trainer import BasicTrainer
 from src.dataset import NIERDataset
-from src.utils import save_data, read_yaml, load_data, get_region_grid, get_best_hyperparam, merge_two_dicts
+from src.utils import save_data, read_yaml, get_region_grid, rmdir
 from sklearn.model_selection import ParameterGrid
+from pathlib import Path
 
-from itertools import product, chain
+from itertools import chain
 import torch.multiprocessing as mp
 import torch
 from tqdm.auto import tqdm
-import numpy as np
 import uuid
 import argparse
 import os
 import pandas as pd
-
+import numpy as np
 
 def arg_config(debug_mode=False):  # ['PM10', 'PM25'] # [3,4,5,6]
     global numeric_scenario, numeric_type, numeric_data_handling, model_ver, seed, lr, dropout, pca_dim
@@ -45,7 +45,7 @@ def arg_config(debug_mode=False):  # ['PM10', 'PM25'] # [3,4,5,6]
     if debug_mode:
         data_grid = dict(
             sampling=['normal'],
-            lag=[1, 7]
+            lag=[1]
         )
     else:
         data_grid = dict(
@@ -105,8 +105,7 @@ def prepare_trainset(predict_region, pm_type, horizon, period_version, rm_region
 
 
 def run_trainer(train_set, valid_sets, test_set, predict_region, pm_type, horizon, obs_dim, esv_years, sampling, lag,
-                is_reg,
-                model_name, model_type, n_epochs, dropout, device, optimizer_name="SGD",
+                is_reg, model_name, model_type, n_epochs, dropout, device, optimizer_name="SGD",
                 objective_name="CrossEntropyLoss", numeric_type='numeric'):
     trainer_args = dict(
         pm_type=pm_type,
@@ -153,6 +152,7 @@ def run_trainer(train_set, valid_sets, test_set, predict_region, pm_type, horizo
         batch_size=64
     )
 
+    # esv result
     net, best_model_weights, val_dict = trainer.esv_train(train_set, valid_sets, esv_years, **train_val_dict)
 
     test_dict = dict()
@@ -168,14 +168,25 @@ def run_trainer(train_set, valid_sets, test_set, predict_region, pm_type, horizo
             'test_label_score': test_label_score
         }
 
-    return net, best_model_weights, val_dict, test_dict
+    # cv result
+    cv_f1_score, cv_results = trainer.cross_validate(train_set, **train_val_dict)
+
+    return net, best_model_weights, val_dict, test_dict, cv_f1_score, cv_results
 
 
 def main(device, pm_type, horizon, predict_region, representative_region, period_version, rm_region, esv_years,
-         debug_mode=False):
+         semaphore, debug_mode=False):
     id_list = []
-
     n_epochs, batch_size, grids = arg_config(debug_mode)
+    result_dir = os.path.join(root_dir, 'results')
+    model_dir = os.path.join(root_dir, 'models')
+    tmp_dir = os.path.join(root_dir, 'tmp')
+    if not os.path.exists(result_dir):
+        os.mkdir(result_dir)
+    if not os.path.exists(model_dir):
+        os.mkdir(model_dir)
+    if not os.path.exists(tmp_dir):
+        os.mkdir(tmp_dir)
 
     for grid in tqdm(grids):  # outer grid
         exp_name = os.path.join(predict_region,
@@ -203,32 +214,27 @@ def main(device, pm_type, horizon, predict_region, representative_region, period
 
         for inner_grid in inner_grids:
             run_type = 'regression' if inner_grid['is_reg'] else 'classification'
-            net, best_model_weights, val_dict, test_dict = run_trainer(train_set, valid_sets, test_set, predict_region,
-                                                                       pm_type,
-                                                                       horizon, obs_dim, esv_years, grid['sampling'],
-                                                                       grid['lag'], inner_grid['is_reg'],
-                                                                       inner_grid['model_name'],
-                                                                       inner_grid['model_type'],
-                                                                       n_epochs, dropout, device)
+            net, best_model_weights, val_dict, test_dict, cv_f1_score, cv_results \
+                = run_trainer(train_set, valid_sets, test_set, predict_region, pm_type, horizon, obs_dim, esv_years,
+                              grid['sampling'], grid['lag'], inner_grid['is_reg'], inner_grid['model_name'],
+                              inner_grid['model_type'], n_epochs, dropout, device)
+
+            # configuration ID
             setting_id = uuid.uuid4()
 
             results = {
                 'id': setting_id,
                 'val_results': val_dict,
-                'test_results': test_dict
+                'test_results': test_dict,
+                'cv_score': cv_f1_score,
+                'cv_results': cv_results
             }
+
             model_weights = {
                 'id': setting_id,
                 'network': net,
                 'model_weights': best_model_weights
             }
-
-            result_dir = os.path.join(root_dir, 'results')
-            model_dir = os.path.join(root_dir, 'models')
-            if not os.path.exists(result_dir):
-                os.mkdir(result_dir)
-            if not os.path.exists(model_dir):
-                os.mkdir(model_dir)
 
             save_data(results, result_dir, f'{setting_id}.pkl')
             save_data(model_weights, model_dir, f'{setting_id}.pkl')
@@ -250,29 +256,40 @@ def main(device, pm_type, horizon, predict_region, representative_region, period
                 model_type=inner_grid['model_type'],
             )
             id_list.append(ids)
+
+            save_data(id_list, tmp_dir, f'id_list_{device}_{semaphore}.pkl')
     return id_list
 
 
-#     return result_grid, model_grid, id_list
-
-
 def multi_gpu(params):
-    gpu_idx = semaphore.pop()
+    gpu_idx = gpus.pop()
+    sema = semaphore.pop()
     device = 'cuda:%d' % gpu_idx if torch.cuda.is_available() else 'cpu'
     print(f'Process using {device}')
     # result_grid, model_grid,
     id_list = main(device, params['pm_type'], params['horizon'], params['predict_region'], \
                    representative_region=params['representative_region'], \
                    period_version=params['periods'], rm_region=params['remove_regions'], \
-                   esv_years=params['esv_years'], debug_mode=params['debug_mode'])
+                   esv_years=params['esv_years'], debug_mode=params['debug_mode'], semaphore=sema)
 
     print(f'Process end {device}')
 
-    semaphore.append(gpu_idx)
-
-    #     return_results_dict.extend(result_grid)
-    #     return_models_dict.extend(model_grid)
+    gpus.append(gpu_idx)
+    semaphore.append(sema)
     return_id_lists.append(id_list)
+
+
+def reset_all():
+    result_dir = os.path.join(root_dir, 'results')
+    model_dir = os.path.join(root_dir, 'models')
+    tmp_dir = os.path.join(root_dir, 'tmp')
+
+    if os.path.exists(result_dir):
+        rmdir(Path(result_dir))
+    if os.path.exists(model_dir):
+        rmdir(Path(model_dir))
+    if os.path.exists(tmp_dir):
+        rmdir(Path(tmp_dir))
 
 
 if __name__ == "__main__":
@@ -280,6 +297,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='retrain arg')
 
     parser.add_argument('--debug', '-d', action="store_true")
+    parser.add_argument('--reset', '-r', action="store_true")
+    parser.add_argument('--gpu_list', '-gl', type=int, nargs='+', default=[0, 1, 2, 3, 4, 5, 6, 7])
     parser.add_argument('--region', help='input region', default='R4_62')
     parser.add_argument('--co2', '-c', type=bool, help='load co2 data or not', default=False)
     parser.add_argument('--root_dir', '-rd', type=str, help='directory to save results',
@@ -292,11 +311,15 @@ if __name__ == "__main__":
     region = args.region
     co2_load = args.co2
     root_dir = args.root_dir
-    root_dir = os.path.join(root_dir, region)
+    if debug:
+        root_dir = os.path.join(root_dir, 'debugging')
+    else:
+        root_dir = os.path.join(root_dir, region)
     if not os.path.exists(root_dir):
         os.mkdir(root_dir)
     data_dir = args.data_dir
-
+    if args.reset:
+        reset_all()
     obj = {
         'debug_mode': [debug],
         'predict_region': [region],
@@ -316,12 +339,12 @@ if __name__ == "__main__":
             grid['esv_years'] = settings['esv_years'][grid['periods']]
             param_list.append(grid)
 
-    gpu_idx_list = [0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 4]
+    gpu_idx_list = args.gpu_list
 
     manager = mp.Manager()
-    semaphore = manager.list(gpu_idx_list)
-    results_dict = manager.dict()
-    models_dict = manager.dict()
+    gpus = manager.list(gpu_idx_list)
+    semaphore = manager.list(np.arange(len(gpu_idx_list)))
+    return_id_lists = manager.list()
     pool = mp.Pool(processes=len(gpu_idx_list))
     pool.map(multi_gpu, param_list)
     pool.close()
@@ -330,4 +353,3 @@ if __name__ == "__main__":
     return_id_lists = list(chain(*return_id_lists))
     return_id_lists = pd.DataFrame(return_id_lists)
     return_id_lists.to_csv(os.path.join(root_dir, f'id_list.csv'), index=False)
-# period_version, rm_region, esv_years, sampling, lag, is_reg, model_name, model_type, exp_name, n_epochs, dropout, device,
