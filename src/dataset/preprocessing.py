@@ -23,10 +23,10 @@ Phase2에서 변경된 점:
 1. 21년도까지 전체 데이터로 학습하는 것으로 변경됨. 그에 따라 start_date, until_date, test_date 개념은 폐기, period_version으로 대체
 2. 또한 'train_periods' dict를 활용해서 p1~p4까지 최적화된 입력기간을 선정하도록 변경함. '[trainset_startdate, trainset_enddate]' 형식으로 지정함
 3. 저장되는 중간 object 파일 명 역시 um_obs_R4_{start_year}_to_{test_year}_230127.pkl -> um_obs_R4_train{period_version}_test{test_period_version}.pkl 로 변경됨
-    - p1: 17-20
-    - p2: 18-20
-    - p3: 19-20
-    - p4: 20
+    - p1: 17-21
+    - p2: 18-21
+    - p3: 19-21
+    - p4: 21
 4. test_period는 22년도 데이터 완성후에 v2가 default이며, 그전까지는 tmp 버전 사용
 """
 
