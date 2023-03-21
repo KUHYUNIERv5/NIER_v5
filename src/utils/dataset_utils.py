@@ -13,8 +13,8 @@ pd.set_option('display.max_rows', 100)
 
 inverse_transform = lambda scaled, var, mean : scaled * var + mean
 
-def db_to_pkl(get_data=False, root_dir='./db_save'):
-    yaml_file = read_yaml("/workspace/local/R5_phase2/NIER_v5/static.yaml")
+def db_to_pkl(get_data=False, root_dir='./db_save', yaml_dir="../../static.yaml"):
+    yaml_file = read_yaml(yaml_dir)
     db_2021 = yaml_file['DBMaster2021']
     db_2022 = yaml_file['DBMaster2022']
     if get_data:
