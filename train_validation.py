@@ -30,7 +30,7 @@ def arg_config(debug_mode=False):  # ['PM10', 'PM25'] # [3,4,5,6]
     numeric_data_handling = 'normal'
     model_ver = 'v2'
     n_epochs = 2 if debug_mode else 50
-    batch_size = 128
+    batch_size = 256
     lr = 0.001
     dropout = .1
     pca_dim = dict(  # 건드리면 안됨
@@ -106,7 +106,7 @@ def prepare_trainset(predict_region, pm_type, horizon, period_version, rm_region
 
 def run_trainer(train_set, valid_sets, test_set, predict_region, pm_type, horizon, obs_dim, esv_years, sampling, lag,
                 is_reg, model_name, model_type, n_epochs, dropout, device, optimizer_name="SGD",
-                objective_name="CrossEntropyLoss", numeric_type='numeric'):
+                objective_name="CrossEntropyLoss", numeric_type='numeric', batch_size=64):
     trainer_args = dict(
         pm_type=pm_type,
         model_name=model_name,
@@ -149,7 +149,7 @@ def run_trainer(train_set, valid_sets, test_set, predict_region, pm_type, horizo
             'region': predict_region
         },
         objective_args={},
-        batch_size=64
+        batch_size=batch_size
     )
 
     # esv result
@@ -217,7 +217,7 @@ def main(device, pm_type, horizon, predict_region, representative_region, period
             net, best_model_weights, val_dict, test_dict, cv_f1_score, cv_results \
                 = run_trainer(train_set, valid_sets, test_set, predict_region, pm_type, horizon, obs_dim, esv_years,
                               grid['sampling'], grid['lag'], inner_grid['is_reg'], inner_grid['model_name'],
-                              inner_grid['model_type'], n_epochs, dropout, device)
+                              inner_grid['model_type'], n_epochs, dropout, device, batch_size=batch_size)
 
             # configuration ID
             setting_id = uuid.uuid4()
@@ -338,6 +338,7 @@ if __name__ == "__main__":
                 grid[key] = param[key]
             grid['esv_years'] = settings['esv_years'][grid['periods']]
             param_list.append(grid)
+    np.random.shuffle(param_list)
 
     gpu_idx_list = args.gpu_list
 
