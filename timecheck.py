@@ -56,7 +56,8 @@ def get_est_time(logger, settings):
     remain_sec = (diff.total_seconds() // done) * left
     remain_time = datetime.timedelta(seconds=remain_sec)
 
-    return datetime.timedelta(seconds=diff.total_seconds()), remain_time, done, left
+    return dt_kst.strftime('%Y-%m-%d %H:%M:%S'), datetime.timedelta(
+        seconds=diff.total_seconds()), remain_time, done, left
 
 
 #     print('duration: ', datetime.timedelta(seconds=diff.total_seconds()))
@@ -91,8 +92,6 @@ if __name__ == "__main__":
     logger = get_logger('check_time', '.')
 
     while True:
-        duration, remain, done, left = get_est_time(logger, settings)
-
-        printProgressBar(done, left, remain)
-
+        now, duration, remain, done, left = get_est_time(logger, settings)
+        printProgressBar(done, left, remain, prefix=now)
         time.sleep(5)

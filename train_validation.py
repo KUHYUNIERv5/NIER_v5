@@ -213,14 +213,14 @@ def main(device, pm_type, horizon, predict_region, representative_region, period
                                                                     pca_dim, numeric_type, seed=seed)
 
         for inner_grid in inner_grids:
+            # configuration ID
+            setting_id = uuid.uuid4()
+
             run_type = 'regression' if inner_grid['is_reg'] else 'classification'
             net, best_model_weights, val_dict, test_dict, cv_f1_score, cv_results \
                 = run_trainer(train_set, valid_sets, test_set, predict_region, pm_type, horizon, obs_dim, esv_years,
                               grid['sampling'], grid['lag'], inner_grid['is_reg'], inner_grid['model_name'],
                               inner_grid['model_type'], n_epochs, dropout, device, batch_size=batch_size)
-
-            # configuration ID
-            setting_id = uuid.uuid4()
 
             results = {
                 'id': setting_id,
@@ -248,7 +248,7 @@ def main(device, pm_type, horizon, predict_region, representative_region, period
                 period_version=period_version,
                 rm_region=rm_region,
                 esv_years=esv_years,
-                exp_name=exp_name,
+                # exp_name=exp_name, # 필요없는 정보
                 lag=grid['lag'],
                 sampling=grid['sampling'],
                 run_type=run_type,

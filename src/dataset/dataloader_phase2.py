@@ -13,7 +13,7 @@ import torch
 from imblearn.over_sampling import RandomOverSampler
 from torch.utils.data import Dataset, DataLoader
 
-from ..utils import load_data
+from src.utils import load_data
 
 
 class NIERDataset(Dataset):
