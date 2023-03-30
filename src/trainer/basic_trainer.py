@@ -413,7 +413,7 @@ class BasicTrainer(ABC):
         train_loader = DataLoader(train_set, batch_size=batch_size)
         valid_loaders = []
         for valid_set, esv_year in zip(valid_sets, esv_years):
-            valid_loaders.append(DataLoader(valid_set, batch_size=batch_size))
+            valid_loaders.append(DataLoader(valid_set, batch_size=1000))
 
         _, best_model_weights, return_dict = self.train(train_loader, valid_loaders, scale, mean, thresholds, net,
                                                         optimizer_args=optimizer_args, objective_args=objective_args,
@@ -678,7 +678,7 @@ class BasicTrainer(ABC):
         Implement test method that evaluates the test_set of dataset on the given network.
         """
         scale, mean, threshold = testset.scale, testset.mean, testset.threshold_dict[self.pm_type]
-        test_loader = DataLoader(testset, batch_size=batch_size, shuffle=False)
+        test_loader = DataLoader(testset, batch_size=1000, shuffle=False)
 
         if self.optimizer is None or self.objective is None:
             self.setup(net.parameters(), optimizer_args, objective_args)
