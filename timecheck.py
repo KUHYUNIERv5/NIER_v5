@@ -7,14 +7,14 @@
 # @Software  : PyCharm
 import numpy as np
 import os
-from src.utils import load_data, read_yaml, get_region_grid, get_logger
+from src.utils import load_data, read_yaml, get_region_grid, get_logger, merge_dicts, get_all_settings
 from sklearn.model_selection import ParameterGrid
 import datetime
 import time
+import argparse
 
-
-def get_est_time(logger, settings):
-    root_dir = '/workspace/results/v5_phase2/R4_64/'
+def get_est_time(region, str_d='2023-03-23 15:44:00'):
+    root_dir = f'/workspace/results/v5_phase2/{region}/'
 
     tmp_dir = os.path.join(root_dir, 'tmp')
     result_dir = os.path.join(root_dir, 'results')
@@ -24,30 +24,14 @@ def get_est_time(logger, settings):
     if len(id_list) != 0:
         id_list = np.concatenate(id_list)
 
-    obj = {
-        'debug_mode': [False],
-        'predict_region': ['R4_64'],
-        'horizon': [3, 4, 5, 6],
-        'pm_type': ['PM10', 'PM25']
-    }
-    obj_list = list(ParameterGrid(obj))
-    param_list = []
-
-    for param in obj_list:
-        grids = get_region_grid('R4_64', settings, param['pm_type'].lower())
-        for grid in grids:
-            for key in param.keys():
-                grid[key] = param[key]
-            grid['esv_years'] = settings['esv_years'][grid['periods']]
-            param_list.append(grid)
+    param_list = get_all_settings(region)
 
     if len(id_list) != 0:
         done = len(id_list)
     else:
         done = 1
-    left = 8 * 14 * len(param_list) - len(id_list)
+    left = len(param_list) - len(id_list)
 
-    str_d = '2023-03-23 15:44:00'
     since_timestamp = datetime.datetime.strptime(str_d, '%Y-%m-%d %H:%M:%S')
 
     dt_kst = datetime.datetime.utcnow() + datetime.timedelta(hours=9)
@@ -89,9 +73,14 @@ def printProgressBar(iteration, total, remain, prefix='', suffix='', decimals=1,
 
 if __name__ == "__main__":
     settings = read_yaml('./data_folder/settings.yaml')
-    logger = get_logger('check_time', '.')
+    parser = argparse.ArgumentParser(description='retrain arg')
+    parser.add_argument('--region', '-r', type=str, help='checking region',
+                        default='R4_64')
+    parser.add_argument('--start_time', '-t', type=str, default='2023-03-23 15:44:00')
+
+    args = parser.parse_args()
 
     while True:
-        now, duration, remain, done, left = get_est_time(logger, settings)
+        now, duration, remain, done, left = get_est_time(args.region, args.start_time)
         printProgressBar(done, left, remain, prefix=now)
         time.sleep(5)
