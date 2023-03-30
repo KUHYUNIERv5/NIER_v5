@@ -3,7 +3,7 @@ import numpy as np
 
 import pymysql
 from sqlalchemy import create_engine
-# from .utils import read_yaml
+from .utils import read_yaml
 pymysql.install_as_MySQLdb()
 
 import os
@@ -13,36 +13,71 @@ pd.set_option('display.max_rows', 100)
 
 inverse_transform = lambda scaled, var, mean : scaled * var + mean
 
-def db_to_pkl(get_data=False, root_dir='./db_save'):
-    # yaml_file = read_yaml("../../static.yaml")
-    # db_master = yaml_file['DBMaster']
-    db_master = "mysql+mysqldb://root:" + "root12" + "@166.104.185.217:32770/AIMTFS_R4"
+def db_to_pkl(get_data=False, root_dir='./db_save', yaml_dir="../../static.yaml"):
+    yaml_file = read_yaml(yaml_dir)
+    db_2021 = yaml_file['DBMaster2021']
+    db_2022 = yaml_file['DBMaster2022']
     if get_data:
-        engine = create_engine(db_master,
+        # 2017-2021
+        engine1 = create_engine(db_2021,
                                encoding='utf-8')
-        conn = engine.connect()
-
-        wrf_df = pd.read_sql("SELECT `WRF_UM1`.* FROM `WRF_UM1`", engine)
-        cmaq_df = pd.read_sql("SELECT `CMAQ_UM1`.* FROM `CMAQ_UM1`", engine)
-
-        # drop not use columns
-        wrf_df = wrf_df.drop(['INSERT_DATE', 'UPDATE_DATE', 'WRF_SR'], axis=1)
-        cmaq_df = cmaq_df.drop(['INSERT_DATE', 'UPDATE_DATE'], axis=1)
-
-        obs_df = pd.read_sql(
+        conn1 = engine1.connect()
+        wrf_train = pd.read_sql("SELECT `WRF_UM1`.* FROM `WRF_UM1`", engine1)
+        cmaq_train = pd.read_sql("SELECT `CMAQ_UM1`.* FROM `CMAQ_UM1`", engine1)
+        obs_train = pd.read_sql(
             "SELECT `OBS_UM1`.*, `DATE_INFO`.`WEEK_NO_KR`,`DATE_INFO`.`WEEK_NO_CN` FROM `OBS_UM1` JOIN `DATE_INFO` ON `OBS_UM1`.`RAW_DATE`=`DATE_INFO`.`RAW_DATE`",
-            engine)
-        fnl_df = pd.read_sql("SELECT `FNL`.* FROM `FNL`", engine)
-        cwdb_df = pd.read_sql("SELECT `CWDB_UM1`.* FROM `CWDB_UM1`", engine)
-        ewkr_df = pd.read_sql("SELECT `EWGI_KRBI`.* FROM `EWGI_KRBI`", engine)
+            engine1)
+        fnl_train = pd.read_sql("SELECT `FNL`.* FROM `FNL`", engine1)
+        cwdb_train = pd.read_sql("SELECT `CWDB_UM1`.* FROM `CWDB_UM1`", engine1)
+        ewkr_train = pd.read_sql("SELECT `EWGI_KRBI`.* FROM `EWGI_KRBI`", engine1)
+        conn1.close()
+        engine1.dispose()
+        
+        # 2022
+        engine2 = create_engine(db_2022, encoding='utf-8')
+        conn2 = engine2.connect()
+        wrf_test = pd.read_sql("SELECT `WRF_UM1`.* FROM `WRF_UM1`", engine2)
+        cmaq_test = pd.read_sql("SELECT `CMAQ_UM1`.* FROM `CMAQ_UM1`", engine2)
 
+        obs_test = pd.read_sql(
+            "SELECT `OBS_UM1`.*, `DATE_INFO`.`WEEK_NO_KR`,`DATE_INFO`.`WEEK_NO_CN` FROM `OBS_UM1` JOIN `DATE_INFO` ON `OBS_UM1`.`RAW_DATE`=`DATE_INFO`.`RAW_DATE`",
+            engine2)
+        fnl_test = pd.read_sql("SELECT `FNL`.* FROM `FNL`", engine2)
+        cwdb_test = pd.read_sql("SELECT `CWDB_UM1`.* FROM `CWDB_UM1`", engine2)
+        ewkr_test = pd.read_sql("SELECT `EWGI_KRBI`.* FROM `EWGI_KRBI`", engine2)
+        conn2.close()
+        engine2.dispose()
+        
+        # 2017-21 date select
+        wrf_train = wrf_train[wrf_train['RAW_DATE'] < 20220101]
+        cmaq_train = cmaq_train[cmaq_train['RAW_DATE'] < 20220101]
+        obs_train = obs_train[obs_train['RAW_DATE'] < 20220101]
+        fnl_train = fnl_train[fnl_train['RAW_DATE'] < 20220101]
+        cwdb_train = cwdb_train[cwdb_train['RAW_DATE'] < 20220101]
+        ewkr_train = ewkr_train[ewkr_train['RAW_DATE'] < 20220112]
+        # 2022 date select
+        wrf_test = wrf_test[(wrf_test['RAW_DATE'] >= 20220101) & (wrf_test['RAW_DATE'] < 20230101)]
+        cmaq_test = cmaq_test[(cmaq_test['RAW_DATE'] >= 20220101) & (cmaq_test['RAW_DATE'] < 20230101)]
+        obs_test = obs_test[(obs_test['RAW_DATE'] >= 20220101) & (obs_test['RAW_DATE'] < 20230101)]
+        fnl_test = fnl_test[(fnl_test['RAW_DATE'] >= 20220101) & (fnl_test['RAW_DATE'] < 20230101)]
+        cwdb_test = cwdb_test[(cwdb_test['RAW_DATE'] >= 20220101) & (cwdb_test['RAW_DATE'] < 20230101)]
+        ewkr_test = ewkr_test[(ewkr_test['RAW_DATE'] >= 20220112) & (ewkr_test['RAW_DATE'] < 20230101)]
+        
+        # concat train and test
+        wrf_df = pd.concat([wrf_train, wrf_test],axis=0).reset_index(drop=True)
+        cmaq_df = pd.concat([cmaq_train, cmaq_test],axis=0).reset_index(drop=True)
+        obs_df = pd.concat([obs_train, obs_test],axis=0).reset_index(drop=True)
+        fnl_df = pd.concat([fnl_train, fnl_test],axis=0).reset_index(drop=True)
+        cwdb_df = pd.concat([cwdb_train, cwdb_test],axis=0).reset_index(drop=True)
+        ewkr_df = pd.concat([ewkr_train, ewkr_test],axis=0).reset_index(drop=True)
+        
         # drop not use columns
         obs_df = obs_df.drop(['INSERT_DATE', 'UPDATE_DATE', 'ASOS_VS', 'ASOS_SI_HR1'], axis=1)
         fnl_df = fnl_df.drop(['INSERT_DATE', 'UPDATE_DATE'], axis=1)
         cwdb_df = cwdb_df.drop(['INSERT_DATE', 'UPDATE_DATE'], axis=1)
         ewkr_df = ewkr_df.drop(['INSERT_DATE', 'UPDATE_DATE'], axis=1)
-        wrf_df = wrf_df.drop('FORECAST_DATE', axis=1)
-        cmaq_df = cmaq_df.drop('FORECAST_DATE', axis=1)
+        wrf_df = wrf_df.drop(['INSERT_DATE', 'UPDATE_DATE', 'FORECAST_DATE', 'WRF_SR'], axis=1)
+        cmaq_df = cmaq_df.drop(['INSERT_DATE', 'UPDATE_DATE', 'FORECAST_DATE'], axis=1)
 
         # drop nodata region --> R4_53, R4_54, R4_58
         obs_df = obs_df[(obs_df['REGION_CODE'] != 'R4_53') & (obs_df['REGION_CODE'] != 'R4_54') & (

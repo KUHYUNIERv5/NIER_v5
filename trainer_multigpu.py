@@ -53,7 +53,7 @@ date_dict = {
 }
 
 start_date, until_date = date_dict[args.period][0], date_dict[args.period][1]
-    
+
 exp_name = args.region + "_" + str(start_date) + '_' + str(until_date) + '_rmgroup_' + str(args.rm_region) # ex) R4_62_20190101_20211231_rmgroup_1
 
 print("exp_name : ", exp_name)

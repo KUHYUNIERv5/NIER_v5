@@ -256,4 +256,4 @@ cython_debug/
 .dataset_maker/
 ./*.ipynb
 
-*.yaml
+static.yaml
