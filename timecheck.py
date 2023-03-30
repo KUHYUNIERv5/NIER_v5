@@ -31,7 +31,6 @@ def get_est_time(region, str_d='2023-03-23 15:44:00'):
     else:
         done = 1
     left = len(param_list) - len(id_list)
-    print(len(param_list), len(id_list))
 
     since_timestamp = datetime.datetime.strptime(str_d, '%Y-%m-%d %H:%M:%S')
 
@@ -83,5 +82,5 @@ if __name__ == "__main__":
 
     while True:
         now, duration, remain, done, left = get_est_time(args.region, args.start_time)
-        printProgressBar(done, left, remain, prefix=now)
+        printProgressBar(done, done + left, remain, prefix=now)
         time.sleep(5)
