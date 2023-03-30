@@ -21,6 +21,7 @@ import argparse
 import os
 import pandas as pd
 import numpy as np
+import datetime
 
 def arg_config(debug_mode=False):  # ['PM10', 'PM25'] # [3,4,5,6]
     global numeric_scenario, numeric_type, numeric_data_handling, model_ver, seed, lr, dropout, pca_dim
@@ -325,11 +326,14 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    current_time = datetime.datetime.utcnow() + datetime.timedelta(hours=9)
+
     debug = args.debug
     region = args.region
     co2_load = args.co2
     root_dir = args.root_dir
     run_cv = args.run_cv
+    print(f"training starting at {current_time.strftime('%Y-%m-%d %H:%M:%S')} with run cv = {run_cv}")
     if debug:
         root_dir = os.path.join(root_dir, 'debugging')
     else:
