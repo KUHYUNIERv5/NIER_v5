@@ -152,25 +152,31 @@ def run_trainer(train_set, valid_sets, test_set, predict_region, pm_type, horizo
         batch_size=batch_size
     )
 
-    # esv result
-    net, best_model_weights, val_dict = trainer.esv_train(train_set, valid_sets, esv_years, **train_val_dict)
+    if run_cv:
+        # cv result
+        net, best_model_weights, cv_f1_score, cv_results = trainer.cross_validate(train_set, **train_val_dict)
+        val_dict = {}
+        test_dict = {}
+    else:
+        # esv result
+        net, best_model_weights, val_dict = trainer.esv_train(train_set, valid_sets, esv_years, **train_val_dict)
 
-    test_dict = dict()
-    for esv_year in esv_years:
-        net.load_state_dict(best_model_weights[esv_year])
-        test_score, test_orig_pred, test_pred_score, test_label_score = trainer.test(test_set, net, 128,
-                                                                                     train_val_dict['optimizer_args'],
-                                                                                     train_val_dict['objective_args'])
-        test_dict[esv_year] = {
-            'test_result': test_score,
-            'test_orig_pred': test_orig_pred,
-            'test_pred_score': test_pred_score,
-            'test_label_score': test_label_score
-        }
-
-    # cv result
-    cv_f1_score, cv_results = trainer.cross_validate(train_set, **train_val_dict)
-
+        test_dict = dict()
+        for esv_year in esv_years:
+            net.load_state_dict(best_model_weights[esv_year])
+            test_score, test_orig_pred, test_pred_score, test_label_score = trainer.test(test_set, net, 128,
+                                                                                         train_val_dict[
+                                                                                             'optimizer_args'],
+                                                                                         train_val_dict[
+                                                                                             'objective_args'])
+            test_dict[esv_year] = {
+                'test_result': test_score,
+                'test_orig_pred': test_orig_pred,
+                'test_pred_score': test_pred_score,
+                'test_label_score': test_label_score
+            }
+        cv_f1_score = 0
+        cv_results = 0
     return net, best_model_weights, val_dict, test_dict, cv_f1_score, cv_results
 
 
@@ -213,28 +219,39 @@ def main(device, pm_type, horizon, predict_region, representative_region, period
                                                                     pca_dim, numeric_type, seed=seed)
 
         for inner_grid in inner_grids:
+            # configuration ID
+            setting_id = uuid.uuid4()
+
             run_type = 'regression' if inner_grid['is_reg'] else 'classification'
             net, best_model_weights, val_dict, test_dict, cv_f1_score, cv_results \
                 = run_trainer(train_set, valid_sets, test_set, predict_region, pm_type, horizon, obs_dim, esv_years,
                               grid['sampling'], grid['lag'], inner_grid['is_reg'], inner_grid['model_name'],
                               inner_grid['model_type'], n_epochs, dropout, device, batch_size=batch_size)
 
-            # configuration ID
-            setting_id = uuid.uuid4()
+            if run_cv:
+                results = {
+                    'id': setting_id,
+                    'cv_score': cv_f1_score,
+                    'cv_results': cv_results
+                }
+                model_weights = {
+                    'id': setting_id,
+                    'network': net,
+                    'model_weights': best_model_weights
+                }
 
-            results = {
-                'id': setting_id,
-                'val_results': val_dict,
-                'test_results': test_dict,
-                'cv_score': cv_f1_score,
-                'cv_results': cv_results
-            }
+            else:
+                results = {
+                    'id': setting_id,
+                    'val_results': val_dict,
+                    'test_results': test_dict
+                }
 
-            model_weights = {
-                'id': setting_id,
-                'network': net,
-                'model_weights': best_model_weights
-            }
+                model_weights = {
+                    'id': setting_id,
+                    'network': net,
+                    'model_weights': best_model_weights
+                }
 
             save_data(results, result_dir, f'{setting_id}.pkl')
             save_data(model_weights, model_dir, f'{setting_id}.pkl')
@@ -248,7 +265,7 @@ def main(device, pm_type, horizon, predict_region, representative_region, period
                 period_version=period_version,
                 rm_region=rm_region,
                 esv_years=esv_years,
-                exp_name=exp_name,
+                # exp_name=exp_name, # 필요없는 정보
                 lag=grid['lag'],
                 sampling=grid['sampling'],
                 run_type=run_type,
@@ -293,11 +310,12 @@ def reset_all():
 
 
 if __name__ == "__main__":
-    global return_id_lists, root_dir, data_dir, co2_load
+    global return_id_lists, root_dir, data_dir, co2_load, run_cv
     parser = argparse.ArgumentParser(description='retrain arg')
 
     parser.add_argument('--debug', '-d', action="store_true")
     parser.add_argument('--reset', '-r', action="store_true")
+    parser.add_argument('--run_cv', '-rc', action="store_true")
     parser.add_argument('--gpu_list', '-gl', type=int, nargs='+', default=[0, 1, 2, 3, 4, 5, 6, 7])
     parser.add_argument('--region', help='input region', default='R4_62')
     parser.add_argument('--co2', '-c', type=bool, help='load co2 data or not', default=False)
@@ -311,12 +329,20 @@ if __name__ == "__main__":
     region = args.region
     co2_load = args.co2
     root_dir = args.root_dir
+    run_cv = args.run_cv
     if debug:
         root_dir = os.path.join(root_dir, 'debugging')
     else:
         root_dir = os.path.join(root_dir, region)
     if not os.path.exists(root_dir):
         os.mkdir(root_dir)
+
+    if run_cv:
+        root_dir = os.path.join(root_dir, 'cv')
+    if not os.path.exists(root_dir):
+        os.mkdir(root_dir)
+
+
     data_dir = args.data_dir
     if args.reset:
         reset_all()

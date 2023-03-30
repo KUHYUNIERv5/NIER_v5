@@ -7,7 +7,7 @@
 # @Software  : PyCharm
 
 from src.dataset import MakeNIERDataset
-from src.utils import load_data, read_yaml, all_equal, concatenate
+from src.utils import read_yaml, all_equal, concatenate
 from sklearn.model_selection import ParameterGrid
 import numpy as np
 
@@ -63,15 +63,19 @@ def get_region_grid(region, settings):
 if __name__ == '__main__':
     settings = read_yaml('./data_folder/settings.yaml')
     # region_lists = [f'R4_{i}' for i in range(59, 69)]
-    region_lists = ['R4_62', ] #'R4_63', 'R4_65','R4_59', 'R4_60', 'R4_61',
+    region_lists = ['R4_68', ] #'R4_63', 'R4_65','R4_59', 'R4_60', 'R4_61',
+
+    ku = False
+
+    preprocess_root = '/workspace/data/NIERDataset/R5_phase2/data_folder' if ku else '/workspace/local/dataset/d5_phase2'
 
     data_param = dict(
         reset_db=False,
         period_version='p3',
         test_period_version='v2',
         seed=999,
-        preprocess_root='/workspace/data/NIERDataset/R5_phase2/data_folder',
-        root_dir="/workspace/data/NIERDataset/R5_phase2/data_folder",
+        preprocess_root=preprocess_root,
+        root_dir=preprocess_root,
         save_processed_data=True,
         run_pca=True,
         predict_region='R4_62',
