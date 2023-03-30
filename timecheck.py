@@ -31,6 +31,7 @@ def get_est_time(region, str_d='2023-03-23 15:44:00'):
     else:
         done = 1
     left = len(param_list) - len(id_list)
+    print(len(param_list), len(id_list))
 
     since_timestamp = datetime.datetime.strptime(str_d, '%Y-%m-%d %H:%M:%S')
 

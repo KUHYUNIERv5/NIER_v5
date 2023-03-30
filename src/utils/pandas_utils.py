@@ -31,6 +31,7 @@ def get_all_settings(region_code='R4_64'):
 
     inner_grid = dict(
         is_reg=[True, False],
+        sampling=['normal', 'oversampling'],
         model_name=['RNN', 'CNN'],
         model_type=['single', 'double']
     )
