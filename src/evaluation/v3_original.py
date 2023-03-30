@@ -13,8 +13,8 @@ import os
 from datetime import date, timedelta
 
 
-from utils import load_data, save_data, obs_window_shifting, window_shifting_V3, get_relative_date, pod_score, accuracy_score, far_score, unpickling
-from models import DoubleInceptionCRNN, DoubleInceptionModel, SingleInceptionCRNN, SingleInceptionModel
+from ..utils import save_data
+from ..models import DoubleInceptionCRNN, DoubleInceptionModel, SingleInceptionCRNN, SingleInceptionModel
 from model_loader import best_cnnrnn_loader, best_cnn_loader
 from data import get_v3_data
 
@@ -47,8 +47,6 @@ def do_test(model, test_loader, dtype, is_reg, device):
     model.eval()
     scores = torch.zeros(0)
     labels = []
-    #     print('model load', time.time() - start)
-    #     start = time.time()
 
     if dtype == 'numeric':
 
@@ -57,15 +55,7 @@ def do_test(model, test_loader, dtype, is_reg, device):
         fnl_x, fnl_y = torch.tensor(fnl_x).to(device).float(), torch.tensor(fnl_y).to(device).long()
         num_x, num_y = torch.tensor(num_x).to(device).float(), torch.tensor(num_y).to(device).long()
 
-        #         print('num data to gpu', time.time() - start)
-        #         start = time.time()
-
-        #         print(obs_x.shape, fnl_x.shape, num_x.shape)
-
         output = model(obs_x, fnl_x, num_x)
-
-        #         print('model inference', time.time() - start)
-        #         start = time.time()
 
         if is_reg:
             output = output[:, 0]
@@ -107,11 +97,6 @@ def do_test(model, test_loader, dtype, is_reg, device):
     labels = labels.numpy()
 
     return scores, labels
-
-
-def do_ensemble(test_result_dict):
-    pass
-
 
 def ensemble_test(models, results, date_value, device):
     start = time.time()
@@ -265,6 +250,12 @@ def ensemble_test(models, results, date_value, device):
             pass
 
     return entire_result_dict
+
+def do_ensemble(test_result_dict):
+    pass
+
+
+
 
 
 def run_v3_test(models, d, results):

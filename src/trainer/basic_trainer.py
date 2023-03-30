@@ -229,7 +229,7 @@ class BasicTrainer(ABC):
             train_sampler = SubsetRandomSampler(train_idx)
             val_sampler = SubsetRandomSampler(val_idx)
             train_loader = DataLoader(dataset, batch_size=batch_size, sampler=train_sampler)
-            val_loader = DataLoader(dataset, batch_size=batch_size, sampler=val_sampler)
+            val_loader = DataLoader(dataset, batch_size=1000, sampler=val_sampler)
 
             model_weights, best_model_weights, return_dict = self.train(train_loader, val_loader, scale, mean,
                                                                         thresholds, net, optimizer_args=optimizer_args,
@@ -240,10 +240,54 @@ class BasicTrainer(ABC):
             kfold_models.append(best_model_weights)
             kfold_results.append(return_dict)
 
+        if self.model_ver == 'v1':
+            if self.model_name == 'CNN':
+                if self.model_type == 'single':
+                    net = SingleInceptionModel(dropout=self.dropout, reg=self.is_reg, **model_args)
+                elif self.model_type == 'double':
+                    net = DoubleInceptionModel(dropout=self.dropout, reg=self.is_reg, **model_args)
+                else:
+                    net = DoubleInceptionModel(dropout=self.dropout, reg=self.is_reg, **model_args)
+
+            if self.model_name == 'RNN':
+                if self.model_type == 'single':
+                    net = SingleInceptionCRNN(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU', **model_args)
+                elif self.model_type == 'double':
+                    net = DoubleInceptionCRNN(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU', **model_args)
+                else:
+                    net = DoubleInceptionCRNN(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU', **model_args)
+        else:
+            if self.model_name == 'CNN':
+                if self.model_type == 'single':
+                    net = SingleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added,
+                                                  **model_args)
+                elif self.model_type == 'double':
+                    net = DoubleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added,
+                                                  **model_args)
+                else:
+                    net = DoubleInceptionModel_v2(dropout=self.dropout, reg=self.is_reg, added_point=is_point_added,
+                                                  **model_args)
+
+            if self.model_name == 'RNN':
+                if self.model_type == 'single':
+                    net = SingleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
+                                                 added_point=is_point_added, **model_args)
+                elif self.model_type == 'double':
+                    net = DoubleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
+                                                 added_point=is_point_added, **model_args)
+                else:
+                    net = DoubleInceptionCRNN_v2(dropout=self.dropout, reg=self.is_reg, rnn_type='GRU',
+                                                 added_point=is_point_added, **model_args)
+
+        trainloader = DataLoader(dataset, batch_size=batch_size)
+        for epoch in range(self.n_epochs):
+            # --------------- Train stage ---------------#
+            _, _, _, _ = self._run_epoch(trainloader, net, scale, mean)
+
         f1_list = [result['best_f1'] for result in kfold_results]
         val_f1_score = np.mean(f1_list)
 
-        return val_f1_score, kfold_results
+        return net, kfold_models, val_f1_score, kfold_results
 
     def single_train(self, train_set: NIERDataset, valid_set: NIERDataset, model_args: dict,
                      optimizer_args: dict, objective_args: dict, param_args: dict, batch_size=64, ):
