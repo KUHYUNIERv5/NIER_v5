@@ -124,7 +124,7 @@ def run_trainer(train_set, valid_sets, test_set, predict_region, pm_type, horizo
         is_reg=is_reg,
         log_path="../log",
         seed=seed,
-        log_flag=True
+        log_flag=False
     )
 
     trainer_args['device'] = device
