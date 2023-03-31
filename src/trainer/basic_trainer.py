@@ -85,7 +85,8 @@ class BasicTrainer(ABC):
 
         self._reset_history()
         self.is_custom_obj = False
-        self.logger = self._get_logger()
+        if self.log_flag:
+            self.logger = self._get_logger()
 
     def __history__(self):
         return self.history
