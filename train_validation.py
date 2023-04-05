@@ -188,12 +188,6 @@ def main(device, pm_type, horizon, predict_region, representative_region, period
     result_dir = os.path.join(root_dir, 'results')
     model_dir = os.path.join(root_dir, 'models')
     tmp_dir = os.path.join(root_dir, 'tmp')
-    if not os.path.exists(result_dir):
-        os.mkdir(result_dir)
-    if not os.path.exists(model_dir):
-        os.mkdir(model_dir)
-    if not os.path.exists(tmp_dir):
-        os.mkdir(tmp_dir)
 
     for grid in tqdm(grids):  # outer grid
         exp_name = os.path.join(predict_region,
@@ -237,7 +231,7 @@ def main(device, pm_type, horizon, predict_region, representative_region, period
                 }
                 model_weights = {
                     'id': setting_id,
-                    'network': net,
+                    'network': net.cpu(),
                     'model_weights': best_model_weights
                 }
 
@@ -250,7 +244,7 @@ def main(device, pm_type, horizon, predict_region, representative_region, period
 
                 model_weights = {
                     'id': setting_id,
-                    'network': net,
+                    'network': net.cpu(),
                     'model_weights': best_model_weights
                 }
 
@@ -308,6 +302,10 @@ def reset_all():
         rmdir(Path(model_dir))
     if os.path.exists(tmp_dir):
         rmdir(Path(tmp_dir))
+
+    os.mkdir(result_dir)
+    os.mkdir(model_dir)
+    os.mkdir(tmp_dir)
 
 
 if __name__ == "__main__":

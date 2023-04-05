@@ -20,17 +20,14 @@ def get_est_time(region, str_d='2023-03-23 15:44:00'):
     result_dir = os.path.join(root_dir, 'results')
     model_dir = os.path.join(root_dir, 'models')
 
-    id_list = [load_data(os.path.join(tmp_dir, file)) for file in os.listdir(tmp_dir)]
-    if len(id_list) != 0:
-        id_list = np.concatenate(id_list)
-
     param_list = get_all_settings(region)
+    done_list = os.listdir(model_dir)
 
-    if len(id_list) != 0:
-        done = len(id_list)
+    if len(done_list) != 0:
+        done = len(done_list)
     else:
         done = 1
-    left = len(param_list) - len(id_list)
+    left = len(param_list) - done
 
     since_timestamp = datetime.datetime.strptime(str_d, '%Y-%m-%d %H:%M:%S')
 
