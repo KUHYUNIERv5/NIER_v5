@@ -13,8 +13,8 @@ import datetime
 import time
 import argparse
 
-def get_est_time(region, str_d='2023-03-23 15:44:00'):
-    root_dir = f'/workspace/results/v5_phase2/{region}/'
+def get_est_time(region, exp_dir=f'/workspace/results/v5_phase2/', str_d='2023-03-23 15:44:00'):
+    root_dir = os.path.join(exp_dir, region)
 
     tmp_dir = os.path.join(root_dir, 'tmp')
     result_dir = os.path.join(root_dir, 'results')
@@ -74,10 +74,11 @@ if __name__ == "__main__":
     parser.add_argument('--region', '-r', type=str, help='checking region',
                         default='R4_64')
     parser.add_argument('--start_time', '-t', type=str, default='2023-03-23 15:44:00')
+    parser.add_argument('--exp_dir', '-d', type=str)
 
     args = parser.parse_args()
 
     while True:
-        now, duration, remain, done, left = get_est_time(args.region, args.start_time)
+        now, duration, remain, done, left = get_est_time(args.region, args.exp_dir, args.start_time)
         printProgressBar(done, done + left, remain, prefix=now)
         time.sleep(5)
