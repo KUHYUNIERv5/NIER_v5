@@ -17,4 +17,4 @@ if __name__ == "__main__":
     parser.add_argument('--region', '-r', type=str)
 
     args = parser.parse_args()
-    get_region_result(exp_dir=args.exp_dir, region=args.region)
+    _ = get_region_result(exp_dir=args.exp_dir, region=args.region)
