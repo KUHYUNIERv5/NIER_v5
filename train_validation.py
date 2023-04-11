@@ -80,7 +80,7 @@ def prepare_trainset(predict_region, pm_type, horizon, period_version, rm_region
         seed=seed,
         serial_y=False,
         period_version=period_version,
-        test_period_version='tmp',
+        test_period_version='v2',
         esv_year=2021,  # early stopping validation year
         co2_load=co2_load,
         rm_region=rm_region,

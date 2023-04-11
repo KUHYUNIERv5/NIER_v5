@@ -81,6 +81,7 @@ class NIERDataset(Dataset):
             p2=[2018, 2019, 2020, 2021],
             p3=[2019, 2020, 2021],
             p4=[2020, 2021],
+            p5=[2021]
         )
         assert esv_year in esv_years[period_version], f'bad esv year. {esv_year} not included in {esv_years[period_version]}'
         assert numeric_type in ['wrf', 'cmaq', 'numeric'], f'bad numeric type: {numeric_type}'
@@ -94,6 +95,7 @@ class NIERDataset(Dataset):
             p2=[20180101, end_date],
             p3=[20190101, end_date],
             p4=[20200101, end_date],
+            p5=[20210101, end_date],
         )
         test_periods = dict(
             v1=[20210101, 20211231],
