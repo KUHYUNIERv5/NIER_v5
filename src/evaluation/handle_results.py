@@ -14,7 +14,8 @@ import uuid
 from sklearn.model_selection import ParameterGrid
 import datetime
 import time
-
+from copy import copy, deepcopy
+import ast
 
 def get_all_settings(region='R4_64'):
     obj = {
@@ -100,3 +101,41 @@ def get_region_result(exp_dir, region='R4_68'):
     return_df = pd.concat([exp_settings, result_df], axis=1)
     return_df.to_excel(os.path.join(root_dir, f'{region}_result.xlsx'), engine='xlsxwriter')
     return return_df
+
+def get_region_resultv2(exp_dir, region='R4_68'):
+    root_dir = os.path.join(exp_dir, region)
+    result_dir = os.path.join(root_dir, 'results')
+    exp_settings = pd.read_csv(os.path.join(root_dir, 'id_list.csv'))
+
+    ids = exp_settings['id'].tolist()
+    ids = [str(id) for id in ids]
+
+    result_list = [load_data(os.path.join(result_dir, f'{i}.pkl')) for i in ids]
+
+    exp_settings_copy = deepcopy(exp_settings)
+    exp_settings_copy.rename(columns={'esv_years': 'esv_year'}, inplace=True)
+
+    for k in ['f1', 'accuracy', 'hit', 'pod', 'far']:
+        exp_settings_copy[f'val_{k}'] = -1.
+        exp_settings_copy[f'test_{k}'] = -1.
+    tmp_df = []
+
+    for i, (exp_setting, result) in enumerate(zip(exp_settings_copy.iterrows(), result_list)):
+        series_list = []
+        e = exp_setting[1]
+        esv_year = ast.literal_eval(e.esv_year)
+        for esv_y in esv_year:
+            e = deepcopy(e)
+            e['esv_year'] = esv_y
+            for k in ['f1', 'accuracy', 'hit', 'pod', 'far']:
+                e[f'val_{k}'] = result['val_results']['best_results'][esv_y][k]
+                e[f'test_{k}'] = result['test_results'][esv_y]['test_result'][k]
+            series_list.append(e)
+        df = pd.concat(series_list, axis=1)
+        df = df.T.reset_index().drop(['index'], axis=1)
+        tmp_df.append(df)
+
+    tmp_df = pd.concat(tmp_df)
+    tmp_df.reset_index(drop=True, inplace=True)
+    tmp_df.to_excel(os.path.join(root_dir, f'{region}_result_v2.xlsx'), engine='xlsxwriter')
+    return tmp_df

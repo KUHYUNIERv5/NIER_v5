@@ -5,7 +5,7 @@
 # @Site      : 
 # @File      : retrieve_result.py
 # @Software  : PyCharm
-from src.evaluation import get_region_result
+from src.evaluation import get_region_result, get_region_resultv2
 import argparse
 
 
@@ -17,4 +17,4 @@ if __name__ == "__main__":
     parser.add_argument('--region', '-r', type=str)
 
     args = parser.parse_args()
-    _ = get_region_result(exp_dir=args.exp_dir, region=args.region)
+    _ = get_region_resultv2(exp_dir=args.exp_dir, region=args.region)
