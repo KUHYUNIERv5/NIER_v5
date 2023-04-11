@@ -112,11 +112,10 @@ def inference_on_2021(region='R4_68', device='cpu', data_dir='/workspace/R5_phas
 
     tmp_df = []
 
-    for i, exp_setting in enumerate(exp_settings[:2].iterrows()):
+    for i, exp_setting in enumerate(exp_settings.iterrows()):
         series_list = []
         e = exp_setting[1]
         esv_year = ast.literal_eval(e.esv_year)
-        print(esv_year)
         file_name = f'{e.id}.pkl'
         model_data = load_data(os.path.join(model_dir, file_name))
         net = model_data['network']
