@@ -20,7 +20,7 @@ import torch
 
 def inference_dataset(predict_region, pm_type, horizon, period_version, rm_region, exp_name,
                       sampling, lag, data_dir, pca_dim, numeric_type, numeric_data_handling='normal',
-                      numeric_scenario=4, seed=999, co2_load=False):
+                      numeric_scenario=4, seed=999, co2_load=False, type=2021):
     dataset_args = dict(
         predict_location_id=predict_region,
         predict_pm=pm_type,
@@ -47,6 +47,12 @@ def inference_dataset(predict_region, pm_type, horizon, period_version, rm_regio
         rm_region=rm_region,
         exp_name=exp_name
     )
+
+    if type == 2022:
+        dataset_args['data_type'] = 'test'
+    else:
+        dataset_args['data_type'] = 'train'
+        dataset_args['period_version'] = 'v5'
 
     inference_set = NIERDataset(**dataset_args)
 
@@ -95,8 +101,8 @@ def inference(net, test_set, pm_type, model_name, model_type, is_reg, optimizer_
     return test_score, test_orig_pred, test_pred_score, test_label_score
 
 
-def inference_on_2021(region='R4_68', device='cpu', data_dir='/workspace/R5_phase2/',
-                      root_dir='/workspace/results/v5_phase2/'):
+def inference_on_validset(region='R4_68', device='cpu', data_dir='/workspace/R5_phase2/',
+                      root_dir='/workspace/results/v5_phase2/', inference_type=2021):
     root_dir = os.path.join(root_dir, region)
 
     model_dir = os.path.join(root_dir, 'models')
@@ -150,7 +156,7 @@ def inference_on_2021(region='R4_68', device='cpu', data_dir='/workspace/R5_phas
         inference_set, obs_dim = inference_dataset(predict_region, pm_type, horizon, period_version, rm_region,
                                                    exp_name, sampling, lag, data_dir, pca_dim, numeric_type,
                                                    numeric_data_handling, numeric_scenario, seed=999,
-                                                   co2_load=False)
+                                                   co2_load=False, type=inference_type)
 
         for esv_y in esv_year:
             e = deepcopy(e)
@@ -170,7 +176,7 @@ def inference_on_2021(region='R4_68', device='cpu', data_dir='/workspace/R5_phas
 
     tmp_df = pd.concat(tmp_df)
     tmp_df.reset_index(drop=True, inplace=True)
-    tmp_df.to_excel(os.path.join(root_dir, f'{region}_inference.xlsx'), engine='xlsxwriter')
+    tmp_df.to_excel(os.path.join(root_dir, f'{region}_{inference_type}inference.xlsx'), engine='xlsxwriter')
     return tmp_df
 
 
