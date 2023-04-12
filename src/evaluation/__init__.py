@@ -5,3 +5,5 @@
 # @Site      : 
 # @File      : __init__.py.py
 # @Software  : PyCharm
+
+from .handle_results import get_all_settings, get_region_result

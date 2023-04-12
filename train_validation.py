@@ -195,7 +195,7 @@ def main(device, pm_type, horizon, predict_region, representative_region, period
     if not os.path.exists(tmp_dir):
         os.mkdir(tmp_dir)
 
-    for grid in tqdm(grids):  # outer grid
+    for grid in tqdm(grids):
         exp_name = os.path.join(predict_region,
                                 f'{predict_region}_{representative_region}_period_{period_version}_rmgroup_{rm_region}')
 
@@ -206,7 +206,6 @@ def main(device, pm_type, horizon, predict_region, representative_region, period
                 model_type=['single']
             )
         else:
-
             inner_grid = dict(
                 is_reg=[True, False],
                 model_name=['RNN', 'CNN'],
@@ -220,9 +219,10 @@ def main(device, pm_type, horizon, predict_region, representative_region, period
                                                                     pca_dim, numeric_type, seed=seed)
 
         for inner_grid in inner_grids:
+            
             # configuration ID
             setting_id = uuid.uuid4()
-
+            
             run_type = 'regression' if inner_grid['is_reg'] else 'classification'
             net, best_model_weights, val_dict, test_dict, cv_f1_score, cv_results \
                 = run_trainer(train_set, valid_sets, test_set, predict_region, pm_type, horizon, obs_dim, esv_years,
@@ -256,7 +256,7 @@ def main(device, pm_type, horizon, predict_region, representative_region, period
 
             save_data(results, result_dir, f'{setting_id}.pkl')
             save_data(model_weights, model_dir, f'{setting_id}.pkl')
-
+            
             ids = dict(
                 id=setting_id,
                 predict_region=predict_region,
@@ -321,8 +321,8 @@ if __name__ == "__main__":
     parser.add_argument('--region', help='input region', default='R4_62')
     parser.add_argument('--co2', '-c', type=bool, help='load co2 data or not', default=False)
     parser.add_argument('--root_dir', '-rd', type=str, help='directory to save results',
-                        default='/workspace/code/R5_phase2_saves')
-    parser.add_argument('--data_dir', '-dd', type=str, default='/workspace/data/NIERDataset/R5_phase2/data_folder')
+                        default='/home/pink/dust/external_drive/dust_prediction_phase_2_multiGPU')
+    parser.add_argument('--data_dir', '-dd', type=str, default='/home/pink/dust/NIER_v5-main/data_folder')
 
     args = parser.parse_args()
 
@@ -368,7 +368,13 @@ if __name__ == "__main__":
                 grid[key] = param[key]
             grid['esv_years'] = settings['esv_years'][grid['periods']]
             param_list.append(grid)
+    for param in param_list:
+        print(param)
+    print(len(param_list))
     np.random.shuffle(param_list)
+    # for param in param_list:
+    #     print(param)
+    # print(len(param_list))
 
     gpu_idx_list = args.gpu_list
 
