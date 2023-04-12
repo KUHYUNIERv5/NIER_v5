@@ -64,6 +64,7 @@ def get_region_grid(region, settings):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='retrain arg')
     parser.add_argument('--region_list', '-rl', type=int, nargs='+', default=[75, 76, 77])
+    parser.add_argument('--pre_root', '-r', type=str, default='/workspace/data/NIERDataset/R5_phase2/data_folder')
     args = parser.parse_args()
 
     settings = read_yaml('./data_folder/settings.yaml')
@@ -72,9 +73,9 @@ if __name__ == '__main__':
     region_lists = [f'R4_{i}' for i in args.region_list]
     print(region_lists)
 
-    ku = False
-
-    preprocess_root = '/workspace/data/NIERDataset/R5_phase2/data_folder' if ku else '/workspace/local/dataset/d5_phase2'
+    # ku = False
+    # preprocess_root = '/workspace/data/NIERDataset/R5_phase2/data_folder' if ku else '/workspace/local/dataset/d5_phase2'
+    preprocess_root = args.pre_root
 
     data_param = dict(
         reset_db=False,
