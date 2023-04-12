@@ -133,7 +133,7 @@ def inference_on_2021(region='R4_68', device='cpu', data_dir='/workspace/R5_phas
 
         model_name = e.model
         model_type = e.model_type
-        is_reg = True if exp_settings.run_type[0] == 'regression' else False
+        is_reg = True if e.run_type == 'regression' else False
 
         period_version = 'p5'  # 2021년 데이터
         pca_dim = dict(  # 건드리면 안됨
