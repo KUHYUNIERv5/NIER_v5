@@ -10,6 +10,7 @@ from src.dataset import MakeNIERDataset
 from src.utils import read_yaml, all_equal, concatenate
 from sklearn.model_selection import ParameterGrid
 import numpy as np
+import argparse
 
 
 def get_best_hyperparam(predict_region, settings):
@@ -61,9 +62,15 @@ def get_region_grid(region, settings):
     return res
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='retrain arg')
+    parser.add_argument('--region_list', '-rl', type=int, nargs='+', default=[75, 76, 77])
+    args = parser.parse_args()
+
     settings = read_yaml('./data_folder/settings.yaml')
     # region_lists = [f'R4_{i}' for i in range(59, 69)]
-    region_lists = ['R4_68', ] #'R4_63', 'R4_65','R4_59', 'R4_60', 'R4_61',
+    # region_lists = ['R4_77', ] #'R4_63', 'R4_65','R4_59', 'R4_60', 'R4_61',
+    region_lists = [f'R4_{i}' for i in args.region_list]
+    print(region_lists)
 
     ku = False
 
