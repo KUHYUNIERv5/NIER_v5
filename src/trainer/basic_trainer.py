@@ -77,15 +77,16 @@ class BasicTrainer(ABC):
         self.optimizer = None
         self.seed = seed
         self.objective = None
-        if not os.path.exists(log_path):
-            os.mkdir(log_path)
-
-        self.log_path = f'{log_path}/{name}.log'
         self.log_flag = log_flag
 
         self._reset_history()
         self.is_custom_obj = False
         if self.log_flag:
+            if not os.path.exists(log_path):
+                os.mkdir(log_path)
+
+            self.log_path = f'{log_path}/{name}.log'
+
             self.logger = self._get_logger()
 
     def __history__(self):
