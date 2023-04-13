@@ -25,7 +25,7 @@ result_df['num_scenario'] = result_df['num_scenario'].replace(['r4', 'r5', 'r6']
 co2_result_df['co2'] = co2_result_df['co2'].map({True: 'with CO2', False: 'w.o CO2'})
 
 
-def _scatter(region, horizon_data, cmaq_data, pm='PM10', horizon=4, ):
+def _scatter_phase1(region, horizon_data, cmaq_data=None, pm='PM10', horizon=4, ):
     pm_map = dict(
         PM10='PM 10',
         PM25='PM 2.5'
@@ -88,24 +88,45 @@ def _scatter(region, horizon_data, cmaq_data, pm='PM10', horizon=4, ):
                 fontsize=14)
     textstr = f'FN f1 max:{r4_max_loc.f1:.3f}\n' \
               f'F123 f1 max:{r5_max_loc.f1:.3f}\n' \
-              f'F123N f1 max:{r6_max_loc.f1:.3f}\n' \
-              f'CMAQ f1 score:{cmaq_data.f1.values[0]:.3f}'
+              f'F123N f1 max:{r6_max_loc.f1:.3f}\n'
+    if not cmaq_data is None:
+        textstr = textstr + f'CMAQ f1 score:{cmaq_data.f1.values[0]:.3f}'
     textbox = AnchoredText(textstr, loc='upper right', prop=dict(size=15), )
     ax.add_artist(textbox)
 
-    if cmaq_data.far.values[0] == 1 and cmaq_data.pod.values[0] == 0:
-        f4 = ax.scatter(x=cmaq_data.far.values[0], y=cmaq_data.pod.values[0], marker='*',
-                        color=sns.color_palette('bright')[3], s=80, lw=1)
-        f5 = ax.scatter(x=far_avg_list, y=pod_avg_list, marker='*', color=sns.color_palette('bright')[2], s=80, lw=1)
-        ax.axhline(cmaq_data.pod.values[0], linestyle='--', color=sns.color_palette('bright')[3])
-        ax.axvline(cmaq_data.far.values[0], linestyle='--', color=sns.color_palette('bright')[3])
-        ax.axhline(pod_avg_list[-1], linestyle='--', color=sns.color_palette('bright')[2])
-        ax.axvline(far_avg_list[-1], linestyle='--', color=sns.color_palette('bright')[2])
-    else:
-        f4 = ax.scatter(x=cmaq_data.far.values[0], y=cmaq_data.pod.values[0], marker='*',
-                        color=sns.color_palette('bright')[3], s=80, lw=1)
-        ax.axhline(cmaq_data.pod.values[0], linestyle='--', color=sns.color_palette('bright')[3])
-        ax.axvline(cmaq_data.far.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+    if not cmaq_data is None:
+        if cmaq_data.far.values[0] == 1 and cmaq_data.pod.values[0] == 0:
+            f4 = ax.scatter(x=cmaq_data.far.values[0], y=cmaq_data.pod.values[0], marker='*',
+                            color=sns.color_palette('bright')[3], s=80, lw=1)
+
+            ax.axhline(cmaq_data.pod.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+            ax.axvline(cmaq_data.far.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+        else:
+            f4 = ax.scatter(x=cmaq_data.far.values[0], y=cmaq_data.pod.values[0], marker='*',
+                            color=sns.color_palette('bright')[3], s=80, lw=1)
+            ax.axhline(cmaq_data.pod.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+            ax.axvline(cmaq_data.far.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+
+
+    f5 = ax.scatter(x=far_avg_list, y=pod_avg_list, marker='*', color=sns.color_palette('bright')[2], s=80, lw=1)
+    ax.axhline(pod_avg_list[-1], linestyle='--', color=sns.color_palette('bright')[2])
+    ax.axvline(far_avg_list[-1], linestyle='--', color=sns.color_palette('bright')[2])
+
+
+
+    # if cmaq_data.far.values[0] == 1 and cmaq_data.pod.values[0] == 0:
+    #     f4 = ax.scatter(x=cmaq_data.far.values[0], y=cmaq_data.pod.values[0], marker='*',
+    #                     color=sns.color_palette('bright')[3], s=80, lw=1)
+    #     f5 = ax.scatter(x=far_avg_list, y=pod_avg_list, marker='*', color=sns.color_palette('bright')[2], s=80, lw=1)
+    #     ax.axhline(cmaq_data.pod.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+    #     ax.axvline(cmaq_data.far.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+    #     ax.axhline(pod_avg_list[-1], linestyle='--', color=sns.color_palette('bright')[2])
+    #     ax.axvline(far_avg_list[-1], linestyle='--', color=sns.color_palette('bright')[2])
+    # else:
+    #     f4 = ax.scatter(x=cmaq_data.far.values[0], y=cmaq_data.pod.values[0], marker='*',
+    #                     color=sns.color_palette('bright')[3], s=80, lw=1)
+    #     ax.axhline(cmaq_data.pod.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+    #     ax.axvline(cmaq_data.far.values[0], linestyle='--', color=sns.color_palette('bright')[3])
     #     plt.colorbar(f1, ax=ax, label='f1 score')
 
     # img = ax.imshow(test_data.to_numpy())
@@ -114,6 +135,258 @@ def _scatter(region, horizon_data, cmaq_data, pm='PM10', horizon=4, ):
     #                  loc=3, bbox_to_anchor=(0.05,0,0,0), frameon=False)
 
     plt.legend(handles=[f1, f2, f3], title='num scenario', loc='center right', bbox_to_anchor=(1.0, 0.78),
+               prop=dict(size=15))
+    plt.show()
+
+
+def _scatter_phase1(region, horizon_data, cmaq_data=None, pm='PM10', horizon=4, ):
+    pm_map = dict(
+        PM10='PM 10',
+        PM25='PM 2.5'
+    )
+    # mpl.rc('figure', figsize=[8, 8])
+    # mpl.rc('lines', markersize=8)
+
+    mpl.rc('xtick', labelsize=13)
+    mpl.rc('axes', labelsize=15)
+    cm = plt.cm.get_cmap('jet')
+    fig, ax = plt.subplots(figsize=[15, 12])
+
+    ax.set_xlim(-0.05, 1.05)
+    ax.set_ylim(-0.05, 1.05)
+    ax.set_xlabel('FAR')
+    ax.set_ylabel('POD')
+    ax.set_title(f"{region} {pm_map[pm]} POD and FAR of horizon {horizon}")
+    pod_avg_list = []
+    far_avg_list = []
+    test_data = horizon_data[horizon_data['num_scenario'] == 'FN']
+    # r4 pod, far 평균 계산
+    pod_avg_list.append(test_data['pod'].mean())
+    far_avg_list.append(test_data['far'].mean())
+    # r4 best f1 annotate
+    idx = test_data['f1'].argmax()
+    r4_max_loc = test_data.iloc[idx]
+    #     f1 = ax.scatter(x=test_data['far'], y=test_data['pod'], marker='1', vmin=0, vmax=1, label='r4', c=test_data.f1, cmap=cm, s=90, lw=1.5)
+    f1 = ax.scatter(x=test_data['far'], y=test_data['pod'], marker='1', vmin=0, vmax=1, label='FN',
+                    color=sns.color_palette('bright')[0], s=90, lw=1.5)
+    test_data = horizon_data[horizon_data['num_scenario'] == 'F123']
+    # r5 pod, far 평균 계산
+    pod_avg_list.append(test_data['pod'].mean())
+    far_avg_list.append(test_data['far'].mean())
+    # r5 best f1 annotate
+    idx = test_data['f1'].argmax()
+    r5_max_loc = test_data.iloc[idx]
+    #     f2 = ax.scatter(x=test_data['far'], y=test_data['pod'], marker='+', vmin=0, vmax=1, label='r5', c=test_data.f1, cmap=cm, s=90, lw=1.5)
+    f2 = ax.scatter(x=test_data['far'], y=test_data['pod'], marker='+', vmin=0, vmax=1, label='F123',
+                    color=sns.color_palette('bright')[1], s=90, lw=1.5)
+    test_data = horizon_data[horizon_data['num_scenario'] == 'F123N']
+    # r6 pod, far 평균 계산
+    pod_avg_list.append(test_data['pod'].mean())
+    far_avg_list.append(test_data['far'].mean())
+    # r6 best f1 annotate
+    idx = test_data['f1'].argmax()
+    r6_max_loc = test_data.iloc[idx]
+    #     f3 = ax.scatter(x=test_data['far'], y=test_data['pod'], marker='x', vmin=0, vmax=1, label='r6', c=test_data.f1, cmap=cm, s=80, lw=1.5)
+    f3 = ax.scatter(x=test_data['far'], y=test_data['pod'], marker='x', vmin=0, vmax=1, label='F123N',
+                    color=sns.color_palette('bright')[2], s=80, lw=1.5)
+    pod_avg_list.append(horizon_data['pod'].mean())
+    far_avg_list.append(horizon_data['far'].mean())
+    f1_max_x = [r4_max_loc.far, r5_max_loc.far, r6_max_loc.far]
+    f1_max_y = [r4_max_loc.pod, r5_max_loc.pod, r6_max_loc.pod]
+    ax.scatter(x=f1_max_x, y=f1_max_y, marker='.', color='red', s=30, lw=1.5)
+    ax.annotate(f'FN', xy=(r4_max_loc.far, r4_max_loc.pod),
+                fontsize=14)
+    ax.annotate(f'F123', xy=(r5_max_loc.far, r5_max_loc.pod),
+                fontsize=14)
+    ax.annotate(f'F123N', xy=(r6_max_loc.far, r6_max_loc.pod),
+                fontsize=14)
+    textstr = f'FN f1 max:{r4_max_loc.f1:.3f}\n' \
+              f'F123 f1 max:{r5_max_loc.f1:.3f}\n' \
+              f'F123N f1 max:{r6_max_loc.f1:.3f}\n'
+    if not cmaq_data is None:
+        textstr = textstr + f'CMAQ f1 score:{cmaq_data.f1.values[0]:.3f}'
+    textbox = AnchoredText(textstr, loc='upper right', prop=dict(size=15), )
+    ax.add_artist(textbox)
+
+    if not cmaq_data is None:
+        if cmaq_data.far.values[0] == 1 and cmaq_data.pod.values[0] == 0:
+            f4 = ax.scatter(x=cmaq_data.far.values[0], y=cmaq_data.pod.values[0], marker='*',
+                            color=sns.color_palette('bright')[3], s=80, lw=1)
+
+            ax.axhline(cmaq_data.pod.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+            ax.axvline(cmaq_data.far.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+        else:
+            f4 = ax.scatter(x=cmaq_data.far.values[0], y=cmaq_data.pod.values[0], marker='*',
+                            color=sns.color_palette('bright')[3], s=80, lw=1)
+            ax.axhline(cmaq_data.pod.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+            ax.axvline(cmaq_data.far.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+
+
+    f5 = ax.scatter(x=far_avg_list, y=pod_avg_list, marker='*', color=sns.color_palette('bright')[2], s=80, lw=1)
+    ax.axhline(pod_avg_list[-1], linestyle='--', color=sns.color_palette('bright')[2])
+    ax.axvline(far_avg_list[-1], linestyle='--', color=sns.color_palette('bright')[2])
+
+
+
+    # if cmaq_data.far.values[0] == 1 and cmaq_data.pod.values[0] == 0:
+    #     f4 = ax.scatter(x=cmaq_data.far.values[0], y=cmaq_data.pod.values[0], marker='*',
+    #                     color=sns.color_palette('bright')[3], s=80, lw=1)
+    #     f5 = ax.scatter(x=far_avg_list, y=pod_avg_list, marker='*', color=sns.color_palette('bright')[2], s=80, lw=1)
+    #     ax.axhline(cmaq_data.pod.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+    #     ax.axvline(cmaq_data.far.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+    #     ax.axhline(pod_avg_list[-1], linestyle='--', color=sns.color_palette('bright')[2])
+    #     ax.axvline(far_avg_list[-1], linestyle='--', color=sns.color_palette('bright')[2])
+    # else:
+    #     f4 = ax.scatter(x=cmaq_data.far.values[0], y=cmaq_data.pod.values[0], marker='*',
+    #                     color=sns.color_palette('bright')[3], s=80, lw=1)
+    #     ax.axhline(cmaq_data.pod.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+    #     ax.axvline(cmaq_data.far.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+    #     plt.colorbar(f1, ax=ax, label='f1 score')
+
+    # img = ax.imshow(test_data.to_numpy())
+    # legend1 = plt.legend([f1], ["Main legend"], fontsize=12, loc=3, bbox_to_anchor=(0,0.1,0,0), frameon=False)
+    # legend2 = plt.legend((f2, f3), ('sublegend 1', 'sublegend 2'), fontsize=9,
+    #                  loc=3, bbox_to_anchor=(0.05,0,0,0), frameon=False)
+
+    plt.legend(handles=[f1, f2, f3], title='num scenario', loc='center right', bbox_to_anchor=(1.0, 0.78),
+               prop=dict(size=15))
+    plt.show()
+
+
+def _scatter_phase2(region, horizon_data, cmaq_data=None, pm='PM10', horizon=4, check_column='lag', check_columns=None):
+    pm_map = dict(
+        PM10='PM 10',
+        PM25='PM 2.5'
+    )
+    # mpl.rc('figure', figsize=[8, 8])
+    # mpl.rc('lines', markersize=8)
+
+    mpl.rc('xtick', labelsize=13)
+    mpl.rc('axes', labelsize=15)
+    cm = plt.cm.get_cmap('jet')
+    fig, ax = plt.subplots(figsize=[15, 12])
+
+    ax.set_xlim(-0.05, 1.05)
+    ax.set_ylim(-0.05, 1.05)
+    ax.set_xlabel('FAR')
+    ax.set_ylabel('POD')
+    ax.set_title(f"{region} {pm_map[pm]} POD and FAR of horizon {horizon}")
+    pod_avg_list = []
+    far_avg_list = []
+    fig_list = []
+    max_loc_list = []
+
+    for column_val in check_columns:
+        test_data = horizon_data[horizon_data[check_column] == column_val]
+        # r4 pod, far 평균 계산
+        pod_avg_list.append(test_data['pod'].mean())
+        far_avg_list.append(test_data['far'].mean())
+        # r4 best f1 annotate
+        idx = test_data['f1'].argmax()
+        max_loc_list.append(test_data.iloc[idx])
+        # r4_max_loc = test_data.iloc[idx]
+        #     f1 = ax.scatter(x=test_data['far'], y=test_data['pod'], marker='1', vmin=0, vmax=1, label='r4', c=test_data.f1, cmap=cm, s=90, lw=1.5)
+        fig = ax.scatter(x=test_data['far'], y=test_data['pod'], marker='1', vmin=0, vmax=1, label='FN',
+                        color=sns.color_palette('bright')[0], s=90, lw=1.5)
+        fig_list.append(fig)
+
+
+
+    # test_data = horizon_data[horizon_data['num_scenario'] == 'F123']
+    # # r5 pod, far 평균 계산
+    # pod_avg_list.append(test_data['pod'].mean())
+    # far_avg_list.append(test_data['far'].mean())
+    # # r5 best f1 annotate
+    # idx = test_data['f1'].argmax()
+    # r5_max_loc = test_data.iloc[idx]
+    # #     f2 = ax.scatter(x=test_data['far'], y=test_data['pod'], marker='+', vmin=0, vmax=1, label='r5', c=test_data.f1, cmap=cm, s=90, lw=1.5)
+    # f2 = ax.scatter(x=test_data['far'], y=test_data['pod'], marker='+', vmin=0, vmax=1, label='F123',
+    #                 color=sns.color_palette('bright')[1], s=90, lw=1.5)
+    #
+    #
+    #
+    #
+    # test_data = horizon_data[horizon_data['num_scenario'] == 'F123N']
+    # # r6 pod, far 평균 계산
+    # pod_avg_list.append(test_data['pod'].mean())
+    # far_avg_list.append(test_data['far'].mean())
+    # # r6 best f1 annotate
+    # idx = test_data['f1'].argmax()
+    # r6_max_loc = test_data.iloc[idx]
+    # #     f3 = ax.scatter(x=test_data['far'], y=test_data['pod'], marker='x', vmin=0, vmax=1, label='r6', c=test_data.f1, cmap=cm, s=80, lw=1.5)
+    # f3 = ax.scatter(x=test_data['far'], y=test_data['pod'], marker='x', vmin=0, vmax=1, label='F123N',
+    #                 color=sns.color_palette('bright')[2], s=80, lw=1.5)
+    #
+
+
+    pod_avg_list.append(horizon_data['pod'].mean())
+    far_avg_list.append(horizon_data['far'].mean())
+
+    f1_max_far = [ml.far for ml in max_loc_list]
+    f1_max_pod = [ml.pod for ml in max_loc_list]
+    f1s = [ml.f1 for ml in max_loc_list]
+
+    ax.scatter(x=f1_max_far, y=f1_max_pod, marker='.', color='red', s=30, lw=1.5)
+    textstr = ''
+    for max_far, max_pod, f1, check_col in zip(f1_max_far, f1_max_pod, f1s, check_columns):
+        ax.annotate(f'{check_col}', xy=(max_far, max_pod), fontsize=14)
+        textstr += f'{check_col} f1 max:{f1:.3f}\n'
+
+
+
+    # ax.annotate(f'F123', xy=(r5_max_loc.far, r5_max_loc.pod),
+    #             fontsize=14)
+    # ax.annotate(f'F123N', xy=(r6_max_loc.far, r6_max_loc.pod),
+    #             fontsize=14)
+    # textstr = f'FN f1 max:{r4_max_loc.f1:.3f}\n' \
+    #           f'F123 f1 max:{r5_max_loc.f1:.3f}\n' \
+    #           f'F123N f1 max:{r6_max_loc.f1:.3f}\n'
+    if not cmaq_data is None:
+        textstr = textstr + f'CMAQ f1 score:{cmaq_data.f1.values[0]:.3f}'
+    textbox = AnchoredText(textstr, loc='upper right', prop=dict(size=15), )
+    ax.add_artist(textbox)
+
+    if not cmaq_data is None:
+        if cmaq_data.far.values[0] == 1 and cmaq_data.pod.values[0] == 0:
+            f4 = ax.scatter(x=cmaq_data.far.values[0], y=cmaq_data.pod.values[0], marker='*',
+                            color=sns.color_palette('bright')[3], s=80, lw=1)
+
+            ax.axhline(cmaq_data.pod.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+            ax.axvline(cmaq_data.far.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+        else:
+            f4 = ax.scatter(x=cmaq_data.far.values[0], y=cmaq_data.pod.values[0], marker='*',
+                            color=sns.color_palette('bright')[3], s=80, lw=1)
+            ax.axhline(cmaq_data.pod.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+            ax.axvline(cmaq_data.far.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+
+
+    f5 = ax.scatter(x=far_avg_list, y=pod_avg_list, marker='*', color=sns.color_palette('bright')[2], s=80, lw=1)
+    ax.axhline(pod_avg_list[-1], linestyle='--', color=sns.color_palette('bright')[2])
+    ax.axvline(far_avg_list[-1], linestyle='--', color=sns.color_palette('bright')[2])
+
+
+
+    # if cmaq_data.far.values[0] == 1 and cmaq_data.pod.values[0] == 0:
+    #     f4 = ax.scatter(x=cmaq_data.far.values[0], y=cmaq_data.pod.values[0], marker='*',
+    #                     color=sns.color_palette('bright')[3], s=80, lw=1)
+    #     f5 = ax.scatter(x=far_avg_list, y=pod_avg_list, marker='*', color=sns.color_palette('bright')[2], s=80, lw=1)
+    #     ax.axhline(cmaq_data.pod.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+    #     ax.axvline(cmaq_data.far.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+    #     ax.axhline(pod_avg_list[-1], linestyle='--', color=sns.color_palette('bright')[2])
+    #     ax.axvline(far_avg_list[-1], linestyle='--', color=sns.color_palette('bright')[2])
+    # else:
+    #     f4 = ax.scatter(x=cmaq_data.far.values[0], y=cmaq_data.pod.values[0], marker='*',
+    #                     color=sns.color_palette('bright')[3], s=80, lw=1)
+    #     ax.axhline(cmaq_data.pod.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+    #     ax.axvline(cmaq_data.far.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+    #     plt.colorbar(f1, ax=ax, label='f1 score')
+
+    # img = ax.imshow(test_data.to_numpy())
+    # legend1 = plt.legend([f1], ["Main legend"], fontsize=12, loc=3, bbox_to_anchor=(0,0.1,0,0), frameon=False)
+    # legend2 = plt.legend((f2, f3), ('sublegend 1', 'sublegend 2'), fontsize=9,
+    #                  loc=3, bbox_to_anchor=(0.05,0,0,0), frameon=False)
+
+    plt.legend(handles=fig_list, title='num scenario', loc='center right', bbox_to_anchor=(1.0, 0.78),
                prop=dict(size=15))
     plt.show()
 
@@ -159,9 +432,9 @@ def _co2_scatter(region, horizon_data, cmaq_data, pm='PM10', horizon=4, ):
     f2 = ax.scatter(x=test_data['far'], y=test_data['pod'], marker='+', vmin=0, vmax=1, label='with CO2',
                     color=sns.color_palette('bright')[1], s=90, lw=1.5)
 
-    f1_max_x = [r4_max_loc.far, r5_max_loc.far]
-    f1_max_y = [r4_max_loc.pod, r5_max_loc.pod]
-    ax.scatter(x=f1_max_x, y=f1_max_y, marker='.', color=sns.color_palette('bright')[7], s=30, lw=1.5)
+    f1_max_far = [r4_max_loc.far, r5_max_loc.far]
+    f1_max_pod = [r4_max_loc.pod, r5_max_loc.pod]
+    ax.scatter(x=f1_max_far, y=f1_max_pod, marker='.', color=sns.color_palette('bright')[7], s=30, lw=1.5)
     ax.annotate(f'no CO2', xy=(r4_max_loc.far, r4_max_loc.pod),
                 fontsize=15)
     ax.annotate(f'CO2', xy=(r5_max_loc.far, r5_max_loc.pod),
@@ -432,3 +705,12 @@ def co2_boxplot(result_data, region, pm='PM10', horizon_list=[3, 4, 5, 6]):
     plt.title(f"{region} {pm} co2 f1 score box plot", size=10)
     plt.legend(title="CO2", loc='upper left', bbox_to_anchor=(-0.3, 1.0))
     plt.show()
+
+def scatter_plotting(region, data, cmaq_data=None, pm='PM10', horizon_list=[3, 4, 5, 6], ):
+    for horizon in horizon_list:
+        horizon_score_data = data[data.horizon == horizon]
+        if not cmaq_data is None:
+            horizon_cmaq_data = cmaq_data[cmaq_data.horizon == horizon]
+        else:
+            horizon_cmaq_data = None
+        _scatter(region, horizon_score_data, horizon_cmaq_data, pm, horizon)

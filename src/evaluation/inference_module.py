@@ -103,7 +103,7 @@ def inference(net, test_set, pm_type, model_name, model_type, is_reg, optimizer_
 
 
 def inference_on_validset(region='R4_68', device='cpu', data_dir='/workspace/R5_phase2/',
-                      root_dir='/workspace/results/v5_phase2/', inference_type=2021):
+                      root_dir='/workspace/results/v5_phase2/', inference_type=2021, debug=False):
     print(f'region: {region} | inference type: {inference_type}')
     root_dir = os.path.join(root_dir, region)
 
@@ -120,7 +120,7 @@ def inference_on_validset(region='R4_68', device='cpu', data_dir='/workspace/R5_
 
     tmp_df = []
 
-    for i, exp_setting in tqdm(enumerate(exp_settings.iterrows())):
+    for idx, exp_setting in tqdm(enumerate(exp_settings.iterrows())):
         now = time.time()
         series_list = []
         e = exp_setting[1]
@@ -178,6 +178,10 @@ def inference_on_validset(region='R4_68', device='cpu', data_dir='/workspace/R5_
         df = pd.concat(series_list, axis=1)
         df = df.T.reset_index().drop(['index'], axis=1)
         tmp_df.append(df)
+
+        if debug and idx == 10:
+            break
+
 
     tmp_df = pd.concat(tmp_df)
     tmp_df.reset_index(drop=True, inplace=True)
