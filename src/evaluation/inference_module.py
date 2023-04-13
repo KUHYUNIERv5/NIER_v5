@@ -182,7 +182,6 @@ def inference_on_validset(region='R4_68', device='cpu', data_dir='/workspace/R5_
         if debug and idx == 10:
             break
 
-
     tmp_df = pd.concat(tmp_df)
     tmp_df.reset_index(drop=True, inplace=True)
     tmp_df.to_excel(os.path.join(root_dir, f'{region}_{inference_type}inference.xlsx'), engine='xlsxwriter')
