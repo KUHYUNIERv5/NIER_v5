@@ -104,6 +104,7 @@ def inference(net, test_set, pm_type, model_name, model_type, is_reg, optimizer_
 
 def inference_on_validset(region='R4_68', device='cpu', data_dir='/workspace/R5_phase2/',
                       root_dir='/workspace/results/v5_phase2/', inference_type=2021):
+    print(f'region: {region} | inference type: {inference_type}')
     root_dir = os.path.join(root_dir, region)
 
     model_dir = os.path.join(root_dir, 'models')
@@ -160,7 +161,7 @@ def inference_on_validset(region='R4_68', device='cpu', data_dir='/workspace/R5_
                                                    numeric_data_handling, numeric_scenario, seed=999,
                                                    co2_load=False, type=inference_type)
 
-        print(esv_year, f'took {time.time() - now} s')
+        print(esv_year, f'inference_set: {inference_set.__len__()} took {time.time() - now:.2f} s')
 
         for esv_y in esv_year:
             e = deepcopy(e)
