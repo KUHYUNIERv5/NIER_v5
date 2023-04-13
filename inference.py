@@ -6,7 +6,7 @@
 # @File      : inference.py
 # @Software  : PyCharm
 
-from src.evaluation.inference_2021 import inference_on_validset
+from src.evaluation.inference_module import inference_on_validset
 
 import argparse
 

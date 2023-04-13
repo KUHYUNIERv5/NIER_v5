@@ -3,11 +3,10 @@
 # @Created   : 2023/04/11 10:39 PM
 # @Author    : Junhyung Kwon
 # @Site      : 
-# @File      : inference_2021.py
+# @File      : inference_module.py
 # @Software  : PyCharm
 
 import os
-import torch
 import numpy as np
 import pandas as pd
 from copy import copy, deepcopy
@@ -16,6 +15,7 @@ from src.dataset import NIERDataset
 from src.trainer import BasicTrainer
 import ast
 import torch
+import time
 
 
 def inference_dataset(predict_region, pm_type, horizon, period_version, rm_region, exp_name,
@@ -119,6 +119,7 @@ def inference_on_validset(region='R4_68', device='cpu', data_dir='/workspace/R5_
     tmp_df = []
 
     for i, exp_setting in enumerate(exp_settings.iterrows()):
+        now = time.time()
         series_list = []
         e = exp_setting[1]
         esv_year = ast.literal_eval(e.esv_year)
@@ -157,6 +158,8 @@ def inference_on_validset(region='R4_68', device='cpu', data_dir='/workspace/R5_
                                                    exp_name, sampling, lag, data_dir, pca_dim, numeric_type,
                                                    numeric_data_handling, numeric_scenario, seed=999,
                                                    co2_load=False, type=inference_type)
+
+        print(esv_year, f'took {time.time() - now} s')
 
         for esv_y in esv_year:
             e = deepcopy(e)
