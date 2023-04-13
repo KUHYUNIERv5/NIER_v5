@@ -13,7 +13,7 @@ import argparse
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='retrieve experiment results')
 
-    parser.add_argument('--debug', '-d', action="store_true")
+    parser.add_argument('--debug', '-de', action="store_true")
     parser.add_argument('--data_dir', '-dd', type=str, help='directory to save results',
                         default='/workspace/R5_phase2/')
     parser.add_argument('--root_dir', '-rd', type=str, default='/workspace/results/v5_phase2/')
