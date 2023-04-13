@@ -52,7 +52,7 @@ def inference_dataset(predict_region, pm_type, horizon, period_version, rm_regio
     if type == 2022:
         dataset_args['data_type'] = 'test'
     else:
-        dataset_args['data_type'] = 'train'
+        dataset_args['data_type'] = 'valid'
         dataset_args['period_version'] = 'p5'
 
     inference_set = NIERDataset(**dataset_args)
