@@ -16,6 +16,7 @@ from src.trainer import BasicTrainer
 import ast
 import torch
 import time
+from tqdm.auto import tqdm
 
 
 def inference_dataset(predict_region, pm_type, horizon, period_version, rm_region, exp_name,
@@ -118,7 +119,7 @@ def inference_on_validset(region='R4_68', device='cpu', data_dir='/workspace/R5_
 
     tmp_df = []
 
-    for i, exp_setting in enumerate(exp_settings.iterrows()):
+    for i, exp_setting in tqdm(enumerate(exp_settings.iterrows())):
         now = time.time()
         series_list = []
         e = exp_setting[1]
