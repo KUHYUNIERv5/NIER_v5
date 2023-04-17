@@ -5,3 +5,5 @@
 # @Site      : 
 # @File      : __init__.py.py
 # @Software  : PyCharm
+
+from .scatter_plot import scatter_plotting
