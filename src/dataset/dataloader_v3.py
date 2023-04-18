@@ -30,7 +30,7 @@ class V3Dataset(Dataset):
                  ):
         super().__init__()
         assert pm_type in ['PM10', 'PM25'], f"Unknown pm type: {pm_type}"
-        assert rm_region in [i + 1 for i in range(4)], f"bad remove region code: {rm_region}"
+        assert rm_region in [i for i in range(4)], f"bad remove region code: {rm_region}"
         assert lag in [i + 1 for i in range(max_lag)], f"Bad lag: {lag}"
 
         self.threshold_dict = dict(
@@ -73,10 +73,10 @@ class V3Dataset(Dataset):
         self.dec_X = self.dec_X.set_index(['RAW_DATE'])
 
         self.max_length = (len(self.obs_X) - (
-                    3 + self.max_lag + self.validation_days + self.max_horizon) * self.timepoint_day - 1) // self.timepoint_day + 1
+                self.max_lag + self.validation_days + self.max_horizon) * self.timepoint_day - 1) // self.timepoint_day + 1
         idx_list = np.arange(self.max_length)
         self.original_idx_list = idx_list * self.timepoint_day + 3 + self.timepoint_day * (
-                self.max_lag + self.validation_days + self.horizon)
+                self.max_lag + self.validation_days)
         self._thresholding()
 
     def _thresholding(self):
@@ -90,6 +90,7 @@ class V3Dataset(Dataset):
         obs_batch = []
         fnl_batch = []
         num_batch = []
+        horizon_day_batch = []
 
         y_idxs = []
 
@@ -100,9 +101,11 @@ class V3Dataset(Dataset):
             y_idxs.append(y_idx)
 
             obs_window = self.obs_X.iloc[start_idx:end_idx]
-            fnl_window = self.fnl_X.iloc[start_idx:end_idx]
+            fnl_window = self.fnl_X.iloc[start_idx:end_idx - 2]
             val_pred_date = self.obs_X.index[end_idx - 1]
             num_window = self.dec_X.loc[val_pred_date[0]]
+
+            horizon_day = torch.Tensor([0.]).float()
 
             if self.horizon > 3:
                 horizon_day = num_window[num_window.RAW_FDAY == self.horizon]
@@ -115,24 +118,28 @@ class V3Dataset(Dataset):
 
             num_window = num_window.drop(['RAW_TIME', 'RAW_FDAY'], axis=1)
 
-            obs_batch.append(torch.tensor(obs_window.values))
-            fnl_batch.append(torch.tensor(fnl_window.values))
-            num_batch.append(torch.tensor(num_window.values))
+            obs_batch.append(torch.Tensor(obs_window.values))
+            fnl_batch.append(torch.Tensor(fnl_window.values))
+            num_batch.append(torch.Tensor(num_window.values))
+
+            horizon_day_batch.append(torch.Tensor(horizon_day))
 
         obs_batch = torch.stack(obs_batch)
         fnl_batch = torch.stack(fnl_batch)
         num_batch = torch.stack(num_batch)
+        horizon_day_batch = torch.stack(horizon_day_batch)
 
-        y_batch = torch.tensor(self.y_.iloc[y_idxs].values).float().squeeze()
-        y_orig_batch = torch.tensor(self.original_y[y_idxs]).float().squeeze()
-        y_cls_batch = torch.tensor(self.y_cls[y_idxs]).float().squeeze()
+        y_batch = torch.Tensor(self.y_.iloc[y_idxs].values).float().squeeze()
+        y_orig_batch = torch.Tensor(self.original_y[y_idxs]).float().squeeze()
+        y_cls_batch = torch.Tensor(self.y_cls[y_idxs]).float().squeeze()
 
-        return obs_batch, fnl_batch, num_batch, y_batch, y_orig_batch, y_cls_batch
+        return obs_batch, fnl_batch, num_batch, y_batch, y_orig_batch, y_cls_batch, horizon_day_batch
 
     def __len__(self):
         return len(self.original_idx_list)
 
     def __getitem__(self, item):
+        horizon_day = torch.Tensor([0.]).float()
         if torch.is_tensor(item):
             item = item.tolist()
         original_idx = self.original_idx_list[item]
@@ -140,12 +147,13 @@ class V3Dataset(Dataset):
         prediction_date = self.obs_X.index[original_idx - 1]
         prediction_idx = original_idx - 1
 
-        obs_batch, fnl_batch, num_batch, y_batch, y_orig_batch, y_cls_batch = self._generate_validation(original_idx,
-                                                                                                        prediction_date,
-                                                                                                        prediction_idx)
+        obs_batch, fnl_batch, num_batch, y_batch, y_orig_batch, y_cls_batch, horizon_day_batch = self._generate_validation(
+            original_idx,
+            prediction_date,
+            prediction_idx)
 
         pred_obs = self.obs_X.iloc[prediction_idx - self.timepoint_day * self.lag: prediction_idx]
-        pred_fnl = self.fnl_X.iloc[prediction_idx - self.timepoint_day * self.lag: prediction_idx]
+        pred_fnl = self.fnl_X.iloc[prediction_idx - self.timepoint_day * self.lag: prediction_idx - 2]
         pred_num = self.dec_X.loc[prediction_date[0]]
 
         if self.horizon > 3:
@@ -162,12 +170,12 @@ class V3Dataset(Dataset):
         pred_obs = torch.from_numpy(pred_obs.to_numpy()).float()
         pred_fnl = torch.from_numpy(pred_fnl.to_numpy()).float()
         pred_num = torch.from_numpy(pred_num.to_numpy()).float()
-        pred_y = torch.tensor([self.y_.iloc[prediction_idx + self.horizon * 4]])
-        pred_y_original = torch.tensor([self.original_y[prediction_idx + self.horizon * 4]])
-        pred_y_cls = torch.tensor([self.y_cls[prediction_idx + self.horizon * 4]])
+        pred_y = torch.Tensor([self.y_.iloc[prediction_idx + self.horizon * 4]])
+        pred_y_original = torch.Tensor([self.original_y[prediction_idx + self.horizon * 4]])
+        pred_y_cls = torch.Tensor([self.y_cls[prediction_idx + self.horizon * 4]])
 
-        return (obs_batch, fnl_batch, num_batch, y_batch, y_orig_batch, y_cls_batch), \
-            (pred_obs, pred_fnl, pred_num, pred_y, pred_y_original, pred_y_cls), prediction_date
+        return (obs_batch, fnl_batch, num_batch, y_batch, y_orig_batch, y_cls_batch, horizon_day_batch), \
+            (pred_obs, pred_fnl, pred_num, pred_y, pred_y_original, pred_y_cls, horizon_day), prediction_date
 
 
 def handle_v3_data(whole_data, predict_region):
@@ -218,6 +226,7 @@ def make_v3_dataset(data_dir):
                 whole_data = load_data(os.path.join(region_dir, file))
                 v3_data = handle_v3_data(whole_data, region)
                 save_data(v3_data, region_dir, name + '.pkl')
+
 
 def get_v3loader(dataset_args, num_workers=1):
     v3_dataset = V3Dataset(**dataset_args)
