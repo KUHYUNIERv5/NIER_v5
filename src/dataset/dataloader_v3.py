@@ -23,8 +23,6 @@ class V3Dataset(Dataset):
                  representative_region,
                  period_version,
                  data_path,
-                 esv_year,
-                 pca_dim=None,
                  lag: int = 1,
                  max_lag: int = 7,
                  horizon: int = 4,
@@ -34,17 +32,6 @@ class V3Dataset(Dataset):
         assert pm_type in ['PM10', 'PM25'], f"Unknown pm type: {pm_type}"
         assert rm_region in [i + 1 for i in range(4)], f"bad remove region code: {rm_region}"
         assert lag in [i + 1 for i in range(max_lag)], f"Bad lag: {lag}"
-
-        if pca_dim is None:
-            pca_dim = dict(
-                obs=256,
-                fnl=512,
-                wrf=128,
-                cmaq=512,
-                numeric=512
-            )
-
-        self.pca_dim = pca_dim
 
         self.threshold_dict = dict(
             PM10=[30, 80, 150],
@@ -63,7 +50,6 @@ class V3Dataset(Dataset):
         self.rm_region = rm_region
         self.period_version = period_version
         self.data_path = data_path
-        self.esv_year = esv_year
         self.lag = lag
         self.horizon = horizon
 
