@@ -12,13 +12,13 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-from src.utils import load_data
+from src.utils import load_data, save_data
 
 
 class V3Dataset(Dataset):
     def __init__(self,
                  predict_region,
-                 predict_pm,
+                 pm_type,
                  rm_region,
                  representative_region,
                  period_version,
@@ -28,10 +28,12 @@ class V3Dataset(Dataset):
                  lag: int = 1,
                  max_lag: int = 7,
                  horizon: int = 4,
-                 pm_type: str = 'pm10',
                  validation_days: int = 14
                  ):
         super().__init__()
+        assert pm_type in ['PM10', 'PM25'], f"Unknown pm type: {pm_type}"
+        assert rm_region in [i + 1 for i in range(4)], f"bad remove region code: {rm_region}"
+        assert lag in [i + 1 for i in range(max_lag)], f"Bad lag: {lag}"
 
         if pca_dim is None:
             pca_dim = dict(
@@ -57,18 +59,17 @@ class V3Dataset(Dataset):
         self.max_lag = max_lag
         self.validation_days = validation_days
         self.predict_region = predict_region
-        self.predict_pm = predict_pm
+        self.pm_type = pm_type
         self.rm_region = rm_region
         self.period_version = period_version
         self.data_path = data_path
         self.esv_year = esv_year
         self.lag = lag
         self.horizon = horizon
-        self.pm_type = pm_type
 
         self.file_name = os.path.join(predict_region,
-                                      f'{predict_region}_{representative_region}_period_{period_version}_rmgroup_{rm_region}')
-
+                                      f'{predict_region}_{representative_region}_period_{period_version}_rmgroup_{rm_region}_v3')
+        self._read_data()
 
     def _read_data(self):
         whole_data = load_data(os.path.join(self.data_path, f'{self.file_name}.pkl'))
@@ -83,12 +84,11 @@ class V3Dataset(Dataset):
         self.dec_X = self.dec_X.set_index(['RAW_DATE'])
 
         self.max_length = (len(self.obs_X) - (
-                    (3 + self.max_lag + self.validation_days + self.max_horizon) * self.timepoint_day - 1)) // self.timepoint_day + 1
+                    3 + self.max_lag + self.validation_days + self.max_horizon) * self.timepoint_day - 1) // self.timepoint_day + 1
         idx_list = np.arange(self.max_length)
-        self.original_idx_list = idx_list * self.timepoint_day + 3 + self.timepoint_day * (self.max_lag + self.validation_days + self.horizon)
+        self.original_idx_list = idx_list * self.timepoint_day + 3 + self.timepoint_day * (
+                self.max_lag + self.validation_days + self.horizon)
         self._thresholding()
-
-
 
     def _thresholding(self):
         y = self.y_.to_numpy().squeeze()
@@ -140,8 +140,6 @@ class V3Dataset(Dataset):
 
         return obs_batch, fnl_batch, num_batch, y_batch, y_orig_batch, y_cls_batch
 
-
-
     def __len__(self):
         print(len(self.original_idx_list))
         return len(self.original_idx_list)
@@ -154,7 +152,9 @@ class V3Dataset(Dataset):
         prediction_date = self.obs_X.index[original_idx - 1]
         prediction_idx = original_idx - 1
 
-        obs_batch, fnl_batch, num_batch, y_batch, y_orig_batch, y_cls_batch = self._generate_validation(original_idx, prediction_date, prediction_idx)
+        obs_batch, fnl_batch, num_batch, y_batch, y_orig_batch, y_cls_batch = self._generate_validation(original_idx,
+                                                                                                        prediction_date,
+                                                                                                        prediction_idx)
 
         pred_obs = self.obs_X.iloc[prediction_idx - self.timepoint_day * self.lag: prediction_idx]
         pred_fnl = self.fnl_X.iloc[prediction_idx - self.timepoint_day * self.lag: prediction_idx]
@@ -179,11 +179,59 @@ class V3Dataset(Dataset):
         pred_y_cls = torch.tensor([self.y_cls[prediction_idx + self.horizon * 4]])
 
         return (obs_batch, fnl_batch, num_batch, y_batch, y_orig_batch, y_cls_batch), \
-            (pred_obs, pred_fnl, pred_num, pred_y, pred_y_original, pred_y_cls)
+            (pred_obs, pred_fnl, pred_num, pred_y, pred_y_original, pred_y_cls), prediction_date
+
+
+def handle_v3_data(whole_data, predict_region):
+    pca_dim = dict(
+        obs=256,
+        fnl=512,
+        wrf=128,
+        cmaq=512,
+        numeric=512
+    )
+
+    y_PM10 = whole_data['obs']['PM10']['test_y'][predict_region]
+    mean_PM10, scale_PM10 = whole_data['obs']['PM10']['mean'], whole_data['obs']['PM10']['scale']
+    y_PM25 = whole_data['obs']['PM25']['test_y'][predict_region]
+    mean_PM25, scale_PM25 = whole_data['obs']['PM25']['mean'], whole_data['obs']['PM25']['scale']
+
+    obs_X = whole_data['obs']['X'][predict_region][f"pca_{pca_dim['obs']}"]['test']
+    fnl_X = whole_data['fnl']['X'][f"pca_{pca_dim['fnl']}"]['test']
+    num_X = whole_data['numeric']['X'][f"pca_{pca_dim['numeric']}"]['test']
+
+    v3_data_dict = dict(
+        obs=obs_X,
+        fnl=fnl_X,
+        num=num_X,
+    )
+    v3_data_dict[f'PM10'] = {
+        'y': y_PM10,
+        'mean': mean_PM10,
+        'scale': scale_PM10
+    }
+    v3_data_dict[f'PM25'] = {
+        'y': y_PM25,
+        'mean': mean_PM25,
+        'scale': scale_PM25
+    }
+
+    return v3_data_dict
+
+
+def make_v3_dataset(data_dir):
+    regions = [f'R4_{i}' for i in np.arange(68, 78)]
+    for region in regions:
+        region_dir = os.path.join(data_dir, region)
+        for file in os.listdir(region_dir):
+            if not '_v3' in file and file.endswith('.pkl'):
+                name = file.split('.')[0] + '_v3'
+                print(name)
+                whole_data = load_data(os.path.join(region_dir, file))
+                v3_data = handle_v3_data(whole_data, region)
+                save_data(v3_data, region_dir, name + '.pkl')
 
 def get_dataloader(dataset_args, shuffle=False, num_workers=1):
     v3_dataset = V3Dataset(**dataset_args)
-    v3_loader = DataLoader(dataset=v3_dataset, batch_size=1, shuffle=shuffle, num_workers=num_workers)
+    v3_loader = DataLoader(dataset=v3_dataset, batch_size=1, shuffle=False, num_workers=num_workers)
     return v3_loader
-
-
