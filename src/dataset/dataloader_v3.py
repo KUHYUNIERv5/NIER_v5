@@ -130,7 +130,6 @@ class V3Dataset(Dataset):
         return obs_batch, fnl_batch, num_batch, y_batch, y_orig_batch, y_cls_batch
 
     def __len__(self):
-        print(len(self.original_idx_list))
         return len(self.original_idx_list)
 
     def __getitem__(self, item):
