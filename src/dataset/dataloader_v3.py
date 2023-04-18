@@ -72,15 +72,18 @@ class V3Dataset(Dataset):
         self._read_data()
 
     def _read_data(self):
-        whole_data = load_data(os.path.join(self.data_path, f'{self.file_name}.pkl'))
+        v3_file = os.path.join(self.data_path, f'{self.file_name}.pkl')
+        try:
+            whole_data = load_data(v3_file)
+        except:
+            print("No v3 file exists. Please generate v3 dataset first (run {source}/make_v3_dataset.py)")
 
-        self.y_ = whole_data['obs'][self.pm_type][f'{self.data_type}_y'][self.predict_region]
-        self.mean, self.scale = whole_data['obs'][self.pm_type]['mean'], whole_data['obs'][self.pm_type]['scale']
+        self.y_ = whole_data[self.pm_type]['y']
+        self.mean, self.scale = whole_data[self.pm_type]['mean'], whole_data[self.pm_type]['scale']
 
-        self.obs_X = whole_data['obs']['X'][self.predict_region][f"pca_{self.pca_dim['obs']}"][self.data_type]
-        self.fnl_X = whole_data['fnl']['X'][f"pca_{self.pca_dim['fnl']}"][self.data_type]
-        self.dec_X = whole_data[self.numeric_type]['X'][f"pca_{self.pca_dim[self.numeric_type]}"][
-            self.data_type].reset_index()
+        self.obs_X = whole_data['obs']
+        self.fnl_X = whole_data['fnl']
+        self.dec_X = whole_data['num'].reset_index()
         self.dec_X = self.dec_X.set_index(['RAW_DATE'])
 
         self.max_length = (len(self.obs_X) - (
@@ -231,7 +234,7 @@ def make_v3_dataset(data_dir):
                 v3_data = handle_v3_data(whole_data, region)
                 save_data(v3_data, region_dir, name + '.pkl')
 
-def get_dataloader(dataset_args, shuffle=False, num_workers=1):
+def get_v3loader(dataset_args, num_workers=1):
     v3_dataset = V3Dataset(**dataset_args)
     v3_loader = DataLoader(dataset=v3_dataset, batch_size=1, shuffle=False, num_workers=num_workers)
     return v3_loader
