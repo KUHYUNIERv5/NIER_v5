@@ -31,6 +31,8 @@ class V3_Runner:
                  pm_type='PM10',
                  horizon=3,
                  validation_days=14,
+                 ensemble=True,
+                 num_ensemble_models=10,
                  debug=True):
         super().__init__()
 
@@ -43,6 +45,8 @@ class V3_Runner:
         self.pm_type = pm_type
         self.horizon = horizon
         self.validation_days = validation_days
+        self.ensemble = ensemble
+        self.num_ensemble_models = num_ensemble_models
 
         self.root_dir = os.path.join(root_dir, region)
 
@@ -168,10 +172,13 @@ class V3_Runner:
             y_cls[y > threshold] = i + 1
         return y_cls
 
+    def run_v3(self):
+
+        pass
+
 
 def main():
     best_config = './data_folder/'
     pass
-
 
 # if __name__ == "__main__":
