@@ -253,7 +253,7 @@ def _scatter_phase1(region, horizon_data, cmaq_data=None, pm='PM10', horizon=4, 
     plt.show()
 
 
-def _scatter_phase2(region, result_df, cmaq_data=None, pm='PM10', horizon=4, check_column='lag'):
+def _scatter_phase2(region, result_df, cmaq_data=None, r4_result_df=None, pm='PM10', horizon=4, check_column='lag'):
     pm_map = dict(
         PM10='PM 10',
         PM25='PM 2.5'
@@ -263,6 +263,7 @@ def _scatter_phase2(region, result_df, cmaq_data=None, pm='PM10', horizon=4, che
 
     cmaqdf_q = cmaq_data.query(str_expr)
     result_q = result_df.query(str_expr)
+    r4_result_q = r4_result_df.query(str_expr)
 
     check_columns = result_q[check_column].unique()
     check_columns = np.sort(check_columns)
@@ -315,7 +316,10 @@ def _scatter_phase2(region, result_df, cmaq_data=None, pm='PM10', horizon=4, che
         textstr += f'{check_col} f1 max:{f1:.3f}\n'
 
     if not cmaqdf_q is None:
-        textstr = textstr + f'CMAQ f1 score:{cmaqdf_q.f1.values[0]:.3f}'
+        textstr = textstr + f'CMAQ f1 score:{cmaqdf_q.f1.values[0]:.3f}\n'
+
+    if not r4_result_q is None:
+        textstr = textstr + f'R4 Best f1 score:{r4_result_q.f1.values[0]:.3f}'
 
     textbox = AnchoredText(textstr, loc='upper right', prop=dict(size=15), )
     ax.add_artist(textbox)
@@ -333,9 +337,9 @@ def _scatter_phase2(region, result_df, cmaq_data=None, pm='PM10', horizon=4, che
             ax.axhline(cmaqdf_q.pod.values[0], linestyle='--', color=sns.color_palette('bright')[3])
             ax.axvline(cmaqdf_q.far.values[0], linestyle='--', color=sns.color_palette('bright')[3])
 
-    f5 = ax.scatter(x=far_avg_list, y=pod_avg_list, marker='*', color=sns.color_palette('bright')[2], s=80, lw=1)
-    ax.axhline(pod_avg_list[-1], linestyle='--', color=sns.color_palette('bright')[2])
-    ax.axvline(far_avg_list[-1], linestyle='--', color=sns.color_palette('bright')[2])
+    f5 = ax.scatter(x=r4_result_q.far.values[0], y=r4_result_q.pod.values[0], marker='*', color=sns.color_palette('bright')[2], s=80, lw=1)
+    ax.axhline(r4_result_q.pod.values[0], linestyle='--', color=sns.color_palette('bright')[2])
+    ax.axvline(r4_result_q.far.values[0], linestyle='--', color=sns.color_palette('bright')[2])
 
     plt.legend(handles=fig_list, title='num scenario', loc='center right', bbox_to_anchor=(1.0, 0.78),
                prop=dict(size=15))
@@ -666,6 +670,6 @@ def scatter_plotting_v1(region, data, cmaq_data=None, pm='PM10', horizon_list=[3
             horizon_cmaq_data = None
         _scatter_phase1(region, horizon_score_data, horizon_cmaq_data, pm, horizon)
 
-def scatter_plotting(region, data, cmaq_data=None, pm='PM10', horizon_list=[3, 4, 5, 6], check_column='lag'):
+def scatter_plotting(region, data, cmaq_data=None, r4_result_df=None, pm='PM10', horizon_list=[3, 4, 5, 6], check_column='lag'):
     for horizon in horizon_list:
-        _scatter_phase2(region, data, cmaq_data, pm=pm, horizon=horizon, check_column=check_column)
+        _scatter_phase2(region, data, cmaq_data, r4_result_df, pm=pm, horizon=horizon, check_column=check_column)
