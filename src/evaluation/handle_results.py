@@ -14,8 +14,13 @@ import uuid
 from sklearn.model_selection import ParameterGrid
 import datetime
 import time
+<<<<<<< HEAD
 from copy import copy, deepcopy
 import ast
+=======
+from tqdm import tqdm
+
+>>>>>>> 78f190460c13ecdfc174561926081d934a74cc0c
 
 def get_all_settings(region='R4_64'):
     obj = {
@@ -84,6 +89,7 @@ def get_region_result(exp_dir, region='R4_68'):
     root_dir = os.path.join(exp_dir, region)
     result_dir = os.path.join(root_dir, 'results')
     exp_settings = pd.read_csv(os.path.join(root_dir, 'id_list.csv'))
+<<<<<<< HEAD
 
     ids = exp_settings['id'].tolist()
     ids = [str(id) for id in ids]
@@ -93,6 +99,17 @@ def get_region_result(exp_dir, region='R4_68'):
     result_df = empty_result_df(len(result_list))
 
     for i, result in enumerate(result_list):
+=======
+    print("id_list.csv loaded")
+    ids = exp_settings['id'].tolist()
+    ids = [str(id) for id in ids]
+
+    result_list = [load_data(os.path.join(result_dir, f'{i}.pkl')) for i in tqdm(ids)]
+
+    result_df = empty_result_df(len(result_list))
+
+    for i, result in enumerate(tqdm(result_list)):
+>>>>>>> 78f190460c13ecdfc174561926081d934a74cc0c
         for year in result['val_results']['best_results'].keys():
             for k in ['f1', 'accuracy', 'hit', 'pod', 'far']:
                 result_df.loc[i, (year, f'val_{k}')] = result['val_results']['best_results'][year][k]
@@ -100,6 +117,7 @@ def get_region_result(exp_dir, region='R4_68'):
 
     return_df = pd.concat([exp_settings, result_df], axis=1)
     return_df.to_excel(os.path.join(root_dir, f'{region}_result.xlsx'), engine='xlsxwriter')
+<<<<<<< HEAD
     return return_df
 
 def get_region_resultv2(exp_dir, region='R4_68'):
@@ -139,3 +157,6 @@ def get_region_resultv2(exp_dir, region='R4_68'):
     tmp_df.reset_index(drop=True, inplace=True)
     tmp_df.to_excel(os.path.join(root_dir, f'{region}_result_v2.xlsx'), engine='xlsxwriter')
     return tmp_df
+=======
+    return return_df
+>>>>>>> 78f190460c13ecdfc174561926081d934a74cc0c
