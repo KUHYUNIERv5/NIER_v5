@@ -310,6 +310,19 @@ def reset_all():
 
 if __name__ == "__main__":
     global return_id_lists, root_dir, data_dir, co2_load, run_cv
+    import logging
+
+    now = datetime.datetime.now()
+    try:
+        os.makedirs('../logs', exist_ok=True)
+        print("Directory '%s' created successfully" % '../logs')
+    except OSError as error:
+        print("Directory '%s' can not be created")
+    
+    logging.basicConfig(filename=f'../logs/error_{now.strftime("%Y-%m-%d %H:%M:%S")}.log', level=logging.DEBUG,
+                        format='%(asctime)s %(levelname)s %(name)s %(message)s')
+    logger = logging.getLogger(__name__)
+
     parser = argparse.ArgumentParser(description='retrain arg')
 
     parser.add_argument('--debug', '-d', action="store_true")
@@ -370,14 +383,19 @@ if __name__ == "__main__":
 
     gpu_idx_list = args.gpu_list
 
-    manager = mp.Manager()
-    gpus = manager.list(gpu_idx_list)
-    semaphore = manager.list(np.arange(len(gpu_idx_list)))
-    return_id_lists = manager.list()
-    pool = mp.Pool(processes=len(gpu_idx_list))
-    pool.map(multi_gpu, param_list)
-    pool.close()
-    pool.join()
+    try:
+        manager = mp.Manager()
+        gpus = manager.list(gpu_idx_list)
+        semaphore = manager.list(np.arange(len(gpu_idx_list)))
+        return_id_lists = manager.list()
+        pool = mp.Pool(processes=len(gpu_idx_list))
+        pool.map(multi_gpu, param_list)
+        pool.close()
+        pool.join()
+    except Exception as error:
+        logger.error(error)
+
+
 
     return_id_lists = list(chain(*return_id_lists))
     return_id_lists = pd.DataFrame(return_id_lists)
