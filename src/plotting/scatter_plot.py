@@ -17,12 +17,12 @@ import matplotlib.patheffects as path_effects
 from matplotlib.offsetbox import AnchoredText
 from scipy.stats import ttest_ind
 
-processed_data_path='/workspace/local/src/datagen/ver_4th/db_save/'
-data_dir = '/workspace/local/results/v2_ku_phase1'
-result_df = pd.read_excel(os.path.join(data_dir, 'total_run_result.xlsx') ,index_col=0)
-co2_result_df = pd.read_excel(os.path.join(data_dir, 'co2_run_result.xlsx') ,index_col=0)
-result_df['num_scenario'] = result_df['num_scenario'].replace(['r4', 'r5', 'r6'], ['FN', 'F123', 'F123N'])
-co2_result_df['co2'] = co2_result_df['co2'].map({True: 'with CO2', False: 'w.o CO2'})
+# processed_data_path='/workspace/local/src/datagen/ver_4th/db_save/'
+# data_dir = '/workspace/local/results/v2_ku_phase1'
+# result_df = pd.read_excel(os.path.join(data_dir, 'total_run_result.xlsx') ,index_col=0)
+# co2_result_df = pd.read_excel(os.path.join(data_dir, 'co2_run_result.xlsx') ,index_col=0)
+# result_df['num_scenario'] = result_df['num_scenario'].replace(['r4', 'r5', 'r6'], ['FN', 'F123', 'F123N'])
+# co2_result_df['co2'] = co2_result_df['co2'].map({True: 'with CO2', False: 'w.o CO2'})
 
 
 def _scatter_phase1(region, horizon_data, cmaq_data=None, pm='PM10', horizon=4, ):
@@ -253,7 +253,7 @@ def _scatter_phase1(region, horizon_data, cmaq_data=None, pm='PM10', horizon=4, 
     plt.show()
 
 
-def _scatter_phase2(region, result_df, cmaq_data=None, r4_result_df=None, pm='PM10', horizon=4, check_column='lag'):
+def _scatter_phase2(region, result_df, cmaq_data=None, r4_result_df=None, pm='PM10', horizon=3, check_column='lag', year=2021 ,save_path='', top_prob=0, top_models = None):
     pm_map = dict(
         PM10='PM 10',
         PM25='PM 2.5'
@@ -267,7 +267,7 @@ def _scatter_phase2(region, result_df, cmaq_data=None, r4_result_df=None, pm='PM
 
     check_columns = result_q[check_column].unique()
     check_columns = np.sort(check_columns)
-    # mpl.rc('figure', figsize=[8, 8])
+    # mpl.rc('figure', figsize=[8, 8]), 
     # mpl.rc('lines', markersize=8)
 
     mpl.rc('xtick', labelsize=13)
@@ -286,7 +286,12 @@ def _scatter_phase2(region, result_df, cmaq_data=None, r4_result_df=None, pm='PM
     max_loc_list = []
 
     marker_list = ['1', '+', '2', 'x', '3', '^', '4']
-    label_list = [f'{check_column} {val}' for val in check_columns]
+    label_list = [f'{check_column} {val}' for val in check_columns] # classification & regression
+    
+
+    ### top_prob_k
+    boundary_value = result_q['val_f1'].quantile(1-top_prob) # 상위 % 값 추출
+    top_model_list = result_q.loc[result_q.val_f1 >= boundary_value].index
 
     for i, column_val in enumerate(check_columns):
         test_data = result_q[result_q[check_column] == column_val]
@@ -295,13 +300,21 @@ def _scatter_phase2(region, result_df, cmaq_data=None, r4_result_df=None, pm='PM
         # r4 best f1 annotate
         idx = test_data['val_f1'].argmax()
         max_loc_list.append(test_data.iloc[idx])
+        
+        
+        if year == 2021: ## Distinguishing top prob Models
+            col = ['red' if test_f1 >= boundary_value else sns.color_palette('bright')[i] for test_f1 in test_data['val_f1']]
+        else: # 2022
+            if top_models is not None:
+                col = ['red' if test_id in top_models else sns.color_palette('bright')[i] for test_id in test_data.index]
+            
         # r4_max_loc = test_data.iloc[idx]
         #     f1 = ax.scatter(x=test_data['far'], y=test_data['pod'], marker='1', vmin=0, vmax=1, label='r4', c=test_data.f1, cmap=cm, s=90, lw=1.5)
         fig = ax.scatter(x=test_data['val_far'], y=test_data['val_pod'], marker=marker_list[i], vmin=0, vmax=1,
                          label=label_list[i],
-                         color=sns.color_palette('bright')[i], s=90, lw=1.5)
+                         c=col, s=90, lw=1.5)
         fig_list.append(fig)
-
+    
     pod_avg_list.append(result_q['val_pod'].mean())
     far_avg_list.append(result_q['val_far'].mean())
 
@@ -341,9 +354,15 @@ def _scatter_phase2(region, result_df, cmaq_data=None, r4_result_df=None, pm='PM
     ax.axhline(r4_result_q.pod.values[0], linestyle='--', color=sns.color_palette('bright')[2])
     ax.axvline(r4_result_q.far.values[0], linestyle='--', color=sns.color_palette('bright')[2])
 
-    plt.legend(handles=fig_list, title='num scenario', loc='center right', bbox_to_anchor=(1.0, 0.78),
+    plt.legend(handles=fig_list, title='cls/reg', loc='center right', bbox_to_anchor=(1.0, 0.78),
                prop=dict(size=15))
-    plt.show()
+    # plt.show()
+    
+    
+    print("save : ", save_path+f"/{pm}_{year}.png")
+    plt.savefig(save_path+f"/{pm}_{year}.png")
+    
+    return top_model_list
 
 
 def _co2_scatter(region, horizon_data, cmaq_data, pm='PM10', horizon=4, ):
@@ -421,7 +440,7 @@ def _co2_scatter(region, horizon_data, cmaq_data, pm='PM10', horizon=4, ):
     #                  loc=3, bbox_to_anchor=(0.05,0,0,0), frameon=False)
 
     plt.legend(handles=[f1, f2], title='co2', loc='center left', bbox_to_anchor=(-0.2, 0.9), prop=dict(size=15))
-    plt.show()
+    # plt.show()
 
 
 def add_median_labels(ax, fmt='.3f'):
@@ -609,7 +628,7 @@ def boxplot(result_data, region, pm='PM10', horizon_list=[3, 4, 5, 6]):
     else:
         legen_loc = (-0.2, 1.0)
     plt.legend(loc='upper left', bbox_to_anchor=legen_loc)
-    plt.show()
+    # plt.show()
 
 
 #     plt.savefig("grouped_boxplot_Seaborn_boxplot_Python.png")
@@ -659,7 +678,7 @@ def co2_boxplot(result_data, region, pm='PM10', horizon_list=[3, 4, 5, 6]):
     plt.ylabel("Horizon", size=14)
     plt.title(f"{region} {pm} co2 f1 score box plot", size=10)
     plt.legend(title="CO2", loc='upper left', bbox_to_anchor=(-0.3, 1.0))
-    plt.show()
+    # plt.show()
 
 def scatter_plotting_v1(region, data, cmaq_data=None, pm='PM10', horizon_list=[3, 4, 5, 6], ):
     for horizon in horizon_list:
@@ -670,6 +689,11 @@ def scatter_plotting_v1(region, data, cmaq_data=None, pm='PM10', horizon_list=[3
             horizon_cmaq_data = None
         _scatter_phase1(region, horizon_score_data, horizon_cmaq_data, pm, horizon)
 
-def scatter_plotting(region, data, cmaq_data=None, r4_result_df=None, pm='PM10', horizon_list=[3, 4, 5, 6], check_column='lag'):
-    for horizon in horizon_list:
-        _scatter_phase2(region, data, cmaq_data, r4_result_df, pm=pm, horizon=horizon, check_column=check_column)
+def scatter_plotting(region, data, cmaq_data=None, r4_result_df=None, pm='PM10', horizon=3, check_column='lag', year=2021, save_dir="", top_prob=0, top_models=None):
+    # for horizon in horizon_list:
+    save_path= os.path.join(save_dir, f"H{horizon}")
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    top_model_list = _scatter_phase2(region, data, cmaq_data, r4_result_df, pm=pm, horizon=horizon, check_column=check_column, year=year ,save_path = save_path, top_prob=top_prob, top_models=top_models)
+    
+    return top_model_list

@@ -14,8 +14,6 @@ region_groups:
     representative: R4_64
   g3:
     regions:
-    - R4_63
-    - R4_65
     - R4_66
     - R4_67
     - R4_68

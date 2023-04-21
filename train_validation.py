@@ -319,8 +319,8 @@ if __name__ == "__main__":
     parser.add_argument('--region', help='input region', default='R4_62')
     parser.add_argument('--co2', '-c', type=bool, help='load co2 data or not', default=False)
     parser.add_argument('--root_dir', '-rd', type=str, help='directory to save results',
-                        default='/workspace/code/R5_phase2_saves')
-    parser.add_argument('--data_dir', '-dd', type=str, default='/workspace/data/NIERDataset/R5_phase2/data_folder')
+                        default='/home/pink/dust/external_drive/dust_prediction_phase_2_multiGPU')
+    parser.add_argument('--data_dir', '-dd', type=str, default='/home/pink/dust/NIER_v5-main/data_folder')
 
     args = parser.parse_args()
 

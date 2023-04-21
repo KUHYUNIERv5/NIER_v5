@@ -120,7 +120,7 @@ def inference_on_validset(region='R4_68', device='cpu', data_dir='/workspace/R5_
 
     tmp_df = []
 
-    for idx, exp_setting in tqdm(enumerate(exp_settings.iterrows())):
+    for i, exp_setting in tqdm(enumerate(exp_settings.iterrows())):
         now = time.time()
         series_list = []
         e = exp_setting[1]
