@@ -70,7 +70,7 @@ class XAIDataset(ABC):
         self.lag = e.lag
 
         file_name = os.path.join(self.region,
-                                 f'{self.region}_{representative_region}_period_{period_version}_rmgroup_{rm_region}')
+                                 f'{self.region}_{representative_region}_period_{period_version}_rmgroup_{rm_region}_xai')
 
         data_file = os.path.join(self.data_dir, f'{file_name}.pkl')
         data = load_data(data_file)
@@ -110,7 +110,8 @@ class XAIDataset(ABC):
 
         mask = ((self.obs['datetime'] >= start_date) & (self.obs['datetime'] <= target_date))
         assert mask.sum() is 0, "해당되는 datetime이 데이터셋에 존재하지 않습니다. 다른 date를 선택해주세요."
-        num_mask = self.num['datetime'] == target_date
+        num_mask = ((self.num['datetime'] >= target_date - pd.Timedelta(hours=15)) &
+                    (self.num['datetime'] <= target_date + pd.Timedelta(hours=6)))
 
         obs_X = self.obs.loc[mask]
         fnl_X = self.fnl.loc[mask]
