@@ -90,7 +90,7 @@ def make_xai_dataset(data_dir):
     for region in regions:
         region_dir = os.path.join(data_dir, region)
         for file in os.listdir(region_dir):
-            if not '_xai' in file and file.endswith('.pkl'):
+            if not '_xai' in file and not '_v3' in file and file.endswith('.pkl'):
                 name = file.split('.')[0] + '_xai'
                 print(name)
                 whole_data = load_data(os.path.join(region_dir, file))
