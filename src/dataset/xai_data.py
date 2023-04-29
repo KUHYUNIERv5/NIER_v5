@@ -50,9 +50,9 @@ class XAIDataset(ABC):
         self.root_dir = os.path.join(root_dir, region)
 
         csv_dir = os.path.join(self.root_dir, 'id_list.csv')
-        exp_settings = pd.read_csv(csv_dir)
+        self.exp_settings = pd.read_csv(csv_dir)
         str_expr = f"(predict_region == '{region}') and (pm_type == '{pm_type}') and (horizon == {horizon})"
-        self.exp = exp_settings.query(str_expr)
+        self.exp = self.exp_settings.query(str_expr)
         self.target_exp = self.exp.iloc[0]
         self.read_and_handle_data()
 
@@ -103,13 +103,21 @@ class XAIDataset(ABC):
         y['datetime'] = pd.to_datetime(datetime_str, format='%Y%m%d%H')
         self.y = y.drop(['RAW_DATE', 'RAW_TIME'], axis=1)
 
-    def select_date(self, predict_date='20210101'):
-        target_date = pd.to_datetime(predict_date)
+    def _date_check(self, start_date, target_date):
+        dataset_datetime = self.obs.datetime
+        flag = dataset_datetime.isin([start_date, target_date]).sum()
+        return flag, dataset_datetime
+
+    def select_date(self, ):
+        target_date = pd.to_datetime(self.predict_date)
         target_date = target_date + pd.Timedelta(hours=self.standard_time)
         start_date = target_date - pd.Timedelta(days=self.lag) + pd.Timedelta(hours=6)
+        data_flag, dataset_datetime = self._date_check(start_date, target_date)
+        dataset_datetime = dataset_datetime.tolist()
+        assert data_flag in [
+            2], f"해당되는 predict_date가 데이터셋에 존재하지 않습니다. 현재 데이터 셋 포함 기간: ({dataset_datetime[0].date()}~{dataset_datetime[-1].date()}\n"
 
         mask = ((self.obs['datetime'] >= start_date) & (self.obs['datetime'] <= target_date))
-        assert mask.sum() is 0, "해당되는 datetime이 데이터셋에 존재하지 않습니다. 다른 date를 선택해주세요."
         num_mask = ((self.num['datetime'] >= target_date - pd.Timedelta(hours=15)) &
                     (self.num['datetime'] <= target_date + pd.Timedelta(hours=6)))
 
