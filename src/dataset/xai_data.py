@@ -49,7 +49,7 @@ class XAIDataset(ABC):
         self.data_dir = data_dir
         self.root_dir = os.path.join(root_dir, region)
 
-        csv_dir = os.path.join(root_dir, 'id_list.csv')
+        csv_dir = os.path.join(self.root_dir, 'id_list.csv')
         exp_settings = pd.read_csv(csv_dir)
         str_expr = f"(predict_region == '{region}') and (pm_type == '{pm_type}') and (horizon == {horizon})"
         self.exp = exp_settings.query(str_expr)
@@ -106,7 +106,7 @@ class XAIDataset(ABC):
     def select_date(self, predict_date='20210101'):
         target_date = pd.to_datetime(predict_date)
         target_date = target_date + pd.Timedelta(hours=self.standard_time)
-        start_date = target_date - pd.Timedelta(days=self.lag) + pd.Timedelta(hours=self.standard_time)
+        start_date = target_date - pd.Timedelta(days=self.lag) + pd.Timedelta(hours=6)
 
         mask = ((self.obs['datetime'] >= start_date) & (self.obs['datetime'] <= target_date))
         assert mask.sum() is 0, "해당되는 datetime이 데이터셋에 존재하지 않습니다. 다른 date를 선택해주세요."
@@ -118,7 +118,6 @@ class XAIDataset(ABC):
         fnl_X = fnl_X.iloc[:-2]
 
         num_X = self.num.loc[num_mask]
-
         if self.horizon > 3:
             horizon_day = num_X[num_X.RAW_FDAY == self.horizon]
             num_X = num_X[num_X.RAW_FDAY.between(1, 3)]
@@ -128,6 +127,7 @@ class XAIDataset(ABC):
 
         else:
             num_X = num_X[num_X.RAW_FDAY.between(1, 4)]
+            horizon_day = None
 
         num_X = num_X.drop(['RAW_FDAY', 'datetime'], axis=1)
         obs_X = obs_X.drop(['datetime'], axis=1)
@@ -147,7 +147,7 @@ class XAIDataset(ABC):
 
         pred_y_cls = torch.Tensor([pred_y_cls])
 
-        return obs_X, fnl_X, num_X, pred_y, pred_y_original, pred_y_cls
+        return obs_X, fnl_X, num_X, horizon_day, pred_y, pred_y_original, pred_y_cls
 
 
 def handle_xai_data(whole_data, region):
