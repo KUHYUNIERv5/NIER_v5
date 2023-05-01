@@ -282,14 +282,17 @@ class BasicTrainer(ABC):
                                                  added_point=is_point_added, **model_args)
 
         trainloader = DataLoader(dataset, batch_size=batch_size)
-        net.to(self.device)
-        for epoch in range(self.n_epochs):
-            # --------------- Train stage ---------------#
-            _, _, _, _ = self._run_epoch(trainloader, net, scale, mean)
+
+        best_model_weights, _, _ = self.train(trainloader, val_loader, scale, mean, thresholds, net,
+                                       optimizer_args=optimizer_args, objective_args=objective_args,
+                                       is_esv=False, is_best=False)
+
+        # for epoch in range(self.n_epochs):
+        #     # --------------- Train stage ---------------#
+        #     _, _, _, _ = self._run_epoch(trainloader, net, scale, mean)
 
         f1_list = [result['best_f1'] for result in kfold_results]
         val_f1_score = np.mean(f1_list)
-        best_model_weights = deepcopy(net.cpu().state_dict())
 
         return net, best_model_weights, kfold_models, val_f1_score, kfold_results
 
@@ -434,10 +437,11 @@ class BasicTrainer(ABC):
 
     def train(self, trainloader: DataLoader, validloader: Union[DataLoader, Iterable[DataLoader]], scale: float,
               mean: float, thresholds: list, net: nn.Module, optimizer_args: dict, objective_args: dict,
-              is_esv: bool = False, esv_years=None):
+              is_esv: bool = False, esv_years=None, is_best=True):
         """
         Implement train method that trains the given network using the train_set of dataset.
 
+        @param is_best: Flag for using validation dataloader
         @param trainloader: loader with training set
         @param validloader: loader or loaders with validataion set
         @param scale: scale vector for reversing standardscale
@@ -516,22 +520,66 @@ class BasicTrainer(ABC):
             # --------------- Train stage end ---------------#
 
             # --------------- Validation stage ---------------#
-            if is_esv:
-                msg_obj = {
-                    'val_loss': {},
-                    'val_score': {}
-                }
+            if is_best:
+                if is_esv:
+                    msg_obj = {
+                        'val_loss': {},
+                        'val_score': {}
+                    }
 
-                val_loss_avg = 0
+                    val_loss_avg = 0
 
-                for vl, esv_year in zip(validloader, esv_years):
-                    val_orig_pred, val_pred, val_label, val_loss = self._run_epoch(vl, net, scale, mean, is_train=False)
-                    val_loss_avg += val_loss
+                    for vl, esv_year in zip(validloader, esv_years):
+                        val_orig_pred, val_pred, val_label, val_loss = self._run_epoch(vl, net, scale, mean, is_train=False)
+                        val_loss_avg += val_loss
+
+                        if self.is_reg:
+                            val_pred_score = self._thresholding(val_pred, thresholds)
+                            val_label_score = self._thresholding(val_label, thresholds)
+
+                        else:
+                            val_pred_score = val_pred
+                            val_label_score = val_label
+
+                        val_score = self._evaluation(val_label_score, val_pred_score)
+                        if self.is_reg:
+                            val_score['RMSE'] = np.sqrt(val_loss)
+
+                        msg_obj['val_loss'][esv_year] = val_loss
+                        msg_obj['val_score'][esv_year] = val_score['f1']
+                        return_dict['val_loss_list'][esv_year].append(val_loss)
+                        return_dict['val_score_list'][esv_year].append(val_score['f1'])
+
+                        if val_score['f1'] > best_losses[esv_year] and epoch > 0:
+                            best_losses[esv_year] = val_score['f1']
+                            return_dict['y_labels'][esv_year] = val_label
+                            return_dict['best_preds'][esv_year] = val_pred
+                            return_dict['best_orig_preds'][esv_year] = val_orig_pred
+                            return_dict['best_results'][esv_year] = val_score
+                            return_dict['best_epochs'][esv_year] = epoch
+                            return_dict['best_f1s'][esv_year] = val_score['f1']
+                            best_model_weights[esv_year] = deepcopy(net.cpu().state_dict())
+                            net.to(self.device)
+                            message = f'Update Best model with esv {esv_year} in epoch {epoch}/{self.n_epochs}'
+                            if self.log_flag:
+                                self.logger.info(message)
+
+                    val_loss_avg = val_loss_avg / len(esv_years)
+
+                    message = f"{self.device} Epoch {epoch}/{self.n_epochs} | train loss: {train_loss} | valid losses: {msg_obj['val_loss']}\n" \
+                              f"\t\t\t\ttrain f1 score: {train_score['f1']} | valid f1 score: {msg_obj['val_score']}"
+                    if self.log_flag:
+                        self.logger.info(message)
+
+                else:
+                    val_orig_pred, val_pred, val_label, val_loss = self._run_epoch(validloader, net, scale, mean,
+                                                                                   is_train=False)
+
+                    # val_loss_avg = val_loss
 
                     if self.is_reg:
                         val_pred_score = self._thresholding(val_pred, thresholds)
                         val_label_score = self._thresholding(val_label, thresholds)
-
                     else:
                         val_pred_score = val_pred
                         val_label_score = val_label
@@ -540,75 +588,32 @@ class BasicTrainer(ABC):
                     if self.is_reg:
                         val_score['RMSE'] = np.sqrt(val_loss)
 
-                    msg_obj['val_loss'][esv_year] = val_loss
-                    msg_obj['val_score'][esv_year] = val_score['f1']
-                    return_dict['val_loss_list'][esv_year].append(val_loss)
-                    return_dict['val_score_list'][esv_year].append(val_score['f1'])
+                    return_dict['val_score_list'].append(val_score)
+                    return_dict['val_loss_list'].append(val_loss)
 
-                    if val_score['f1'] > best_losses[esv_year] and epoch > 0:
-                        best_losses[esv_year] = val_score['f1']
-                        return_dict['y_labels'][esv_year] = val_label
-                        return_dict['best_preds'][esv_year] = val_pred
-                        return_dict['best_orig_preds'][esv_year] = val_orig_pred
-                        return_dict['best_results'][esv_year] = val_score
-                        return_dict['best_epochs'][esv_year] = epoch
-                        return_dict['best_f1s'][esv_year] = val_score['f1']
-                        best_model_weights[esv_year] = deepcopy(net.cpu().state_dict())
-                        net.to(self.device)
-                        message = f'Update Best model with esv {esv_year} in epoch {epoch}/{self.n_epochs}'
-                        if self.log_flag:
-                            self.logger.info(message)
-
-                val_loss_avg = val_loss_avg / len(esv_years)
-
-                message = f"{self.device} Epoch {epoch}/{self.n_epochs} | train loss: {train_loss} | valid losses: {msg_obj['val_loss']}\n" \
-                          f"\t\t\t\ttrain f1 score: {train_score['f1']} | valid f1 score: {msg_obj['val_score']}"
-                if self.log_flag:
-                    self.logger.info(message)
-
-            else:
-                val_orig_pred, val_pred, val_label, val_loss = self._run_epoch(validloader, net, scale, mean,
-                                                                               is_train=False)
-
-                # val_loss_avg = val_loss
-
-                if self.is_reg:
-                    val_pred_score = self._thresholding(val_pred, thresholds)
-                    val_label_score = self._thresholding(val_label, thresholds)
-                else:
-                    val_pred_score = val_pred
-                    val_label_score = val_label
-
-                val_score = self._evaluation(val_label_score, val_pred_score)
-                if self.is_reg:
-                    val_score['RMSE'] = np.sqrt(val_loss)
-
-                return_dict['val_score_list'].append(val_score)
-                return_dict['val_loss_list'].append(val_loss)
-
-                message = f"{self.device} Epoch {epoch}/{self.n_epochs} | train loss: {train_loss} | valid loss: {val_loss}\n" \
-                          f"\t\t\t\ttrain f1 score: {train_score['f1']} | valid f1 score: {val_score['f1']}"
-                if self.log_flag:
-                    self.logger.info(message)
-
-                if val_score['f1'] > best_loss and epoch > 0:
-                    best_loss = val_score['f1']
-                    return_dict['y_label'] = val_label
-                    return_dict['best_pred'] = val_pred
-                    return_dict['best_orig_pred'] = val_orig_pred
-                    return_dict['best_result'] = val_score
-                    return_dict['best_epoch'] = epoch
-                    return_dict['best_f1'] = val_score['f1']
-                    best_model_weights = deepcopy(net.cpu().state_dict())
-                    net.to(self.device)
-                    message = f'Update Best models in epoch {epoch}/{self.n_epochs}'
+                    message = f"{self.device} Epoch {epoch}/{self.n_epochs} | train loss: {train_loss} | valid loss: {val_loss}\n" \
+                              f"\t\t\t\ttrain f1 score: {train_score['f1']} | valid f1 score: {val_score['f1']}"
                     if self.log_flag:
                         self.logger.info(message)
+
+                    if val_score['f1'] > best_loss and epoch > 0:
+                        best_loss = val_score['f1']
+                        return_dict['y_label'] = val_label
+                        return_dict['best_pred'] = val_pred
+                        return_dict['best_orig_pred'] = val_orig_pred
+                        return_dict['best_result'] = val_score
+                        return_dict['best_epoch'] = epoch
+                        return_dict['best_f1'] = val_score['f1']
+                        best_model_weights = deepcopy(net.cpu().state_dict())
+                        net.to(self.device)
+                        message = f'Update Best models in epoch {epoch}/{self.n_epochs}'
+                        if self.log_flag:
+                            self.logger.info(message)
 
             # --------------- Validation stage end ---------------#
 
             if not self.scheduler is None:
-                if self.scheduler == 'ReduceLROnPlateau':
+                if self.scheduler == 'ReduceLROnPlateau' and is_best:
                     scheduler.step(val_loss)
                 else:
                     scheduler.step()
