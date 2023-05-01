@@ -271,7 +271,9 @@ class NIERDataset(Dataset):
             horizon_day = horizon_day[horizon_day.RAW_TIME == '15'].drop(['RAW_TIME', 'RAW_FDAY'], axis=1)
             # print(type(horizon_day), horizon_day.shape)
             horizon_day = torch.from_numpy(horizon_day.to_numpy()).squeeze().float()
-        else:
+        elif self.horizon == 3:
+            num_window = num_window[num_window.RAW_FDAY.between(1, 3)]
+        else: # self.horizon == 3
             num_window = num_window[num_window.RAW_FDAY.between(1, self.numeric_scenario)]
 
         if self.numeric_data_handling == 'mean':

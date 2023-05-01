@@ -288,8 +288,9 @@ class BasicTrainer(ABC):
 
         f1_list = [result['best_f1'] for result in kfold_results]
         val_f1_score = np.mean(f1_list)
+        best_model_weights = deepcopy(net.cpu().state_dict())
 
-        return net, kfold_models, val_f1_score, kfold_results
+        return net, best_model_weights, kfold_models, val_f1_score, kfold_results
 
     def single_train(self, train_set: NIERDataset, valid_set: NIERDataset, model_args: dict,
                      optimizer_args: dict, objective_args: dict, param_args: dict, batch_size=64, ):
