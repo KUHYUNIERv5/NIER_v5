@@ -155,7 +155,7 @@ def run_trainer(train_set, valid_sets, test_set, predict_region, pm_type, horizo
 
     if run_cv:
         # cv result
-        net, best_model_weights, cv_f1_score, cv_results = trainer.cross_validate(train_set, **train_val_dict)
+        net, best_model_weights, kfold_models, cv_f1_score, cv_results = trainer.cross_validate(train_set, **train_val_dict)
         val_dict = {}
         test_dict = {}
     else:
