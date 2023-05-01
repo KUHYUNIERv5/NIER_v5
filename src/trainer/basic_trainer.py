@@ -282,6 +282,7 @@ class BasicTrainer(ABC):
                                                  added_point=is_point_added, **model_args)
 
         trainloader = DataLoader(dataset, batch_size=batch_size)
+        net.to(self.device)
         for epoch in range(self.n_epochs):
             # --------------- Train stage ---------------#
             _, _, _, _ = self._run_epoch(trainloader, net, scale, mean)

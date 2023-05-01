@@ -303,9 +303,9 @@ def reset_all():
     if os.path.exists(tmp_dir):
         rmdir(Path(tmp_dir))
 
-    os.mkdir(result_dir)
-    os.mkdir(model_dir)
-    os.mkdir(tmp_dir)
+    os.makedirs(result_dir, exist_ok=True)
+    os.makedirs(model_dir, exist_ok=True)
+    os.makedirs(tmp_dir, exist_ok=True)
 
 
 if __name__ == "__main__":
@@ -345,7 +345,7 @@ if __name__ == "__main__":
     root_dir = args.root_dir
     run_cv = args.run_cv
     print(f"training starting at {current_time.strftime('%Y-%m-%d %H:%M:%S')} with run cv = {run_cv}")
-    if debug:
+    if debug and not run_cv:
         root_dir = os.path.join(root_dir, 'debugging')
     else:
         root_dir = os.path.join(root_dir, region)
@@ -353,9 +353,9 @@ if __name__ == "__main__":
         os.mkdir(root_dir)
 
     if run_cv:
-        root_dir = os.path.join(root_dir, 'cv')
-    if not os.path.exists(root_dir):
-        os.mkdir(root_dir)
+        root_dir = os.path.join(root_dir, f'cv')
+
+    os.makedirs(root_dir, exist_ok=True)
 
 
     data_dir = args.data_dir

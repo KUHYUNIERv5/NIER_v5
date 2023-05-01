@@ -30,11 +30,12 @@ class V3_Runner:
                  inference_type=2022,
                  pm_type='PM10',
                  horizon=3,
-                 validation_days=14,
+                 validation_days=7,
                  ensemble=True,
                  num_ensemble_models=10,
                  debug=True,
-                 model_num=100):
+                 model_num=100,
+                 add_r4_models=True):
         super().__init__()
 
         self.region = region
@@ -48,6 +49,7 @@ class V3_Runner:
         self.validation_days = validation_days
         self.ensemble = ensemble
         self.num_ensemble_models = num_ensemble_models
+        self.add_r4_models = add_r4_models
 
         self.root_dir = os.path.join(root_dir, region)
         self.model_dir = os.path.join(root_dir, 'models')
