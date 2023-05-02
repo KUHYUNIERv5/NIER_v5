@@ -16,8 +16,8 @@ import torch
 
 
 class XAIDataset(ABC):
-    def __init__(self, region, pm_type, horizon, predict_date='20210501', data_dir='/workspace/R5_phase2/',
-                 root_dir='/workspace/results/v5_phase2/'):
+    def __init__(self, region, pm_type, horizon, lag, period_version, rm_region, predict_date='20210501',
+                 data_dir='/workspace/R5_phase2/', root_dir='/workspace/results/v5_phase2/'):
         super().__init__()
 
         self.y = None
@@ -27,7 +27,7 @@ class XAIDataset(ABC):
         self.num = None
         self.fnl = None
         self.obs = None
-        self.lag = None
+        self.lag = lag
 
         self.standard_time = 15
         self.pca_dim = dict(
@@ -51,9 +51,16 @@ class XAIDataset(ABC):
 
         csv_dir = os.path.join(self.root_dir, 'id_list.csv')
         self.exp_settings = pd.read_csv(csv_dir)
-        str_expr = f"(predict_region == '{region}') and (pm_type == '{pm_type}') and (horizon == {horizon})"
+        str_expr = (f"(predict_region == '{region}') and "
+                    f"(pm_type == '{pm_type}') and "
+                    f"(horizon == {horizon}) and "
+                    f"(period_version == '{period_version}') and "
+                    f"(rm_region == {rm_region})"
+                    )
         self.exp = self.exp_settings.query(str_expr)
+        assert self.exp.shape[0] is not 0, f"선택한 모델 세팅은 phase2 범위에 없습니다. 세팅 값을 다시 확인해주세요"
         self.target_exp = self.exp.iloc[0]
+
         self.read_and_handle_data()
 
     def select_exp_setting(self, exp_id):
@@ -67,7 +74,6 @@ class XAIDataset(ABC):
         representative_region = e.representative_region
         period_version = e.period_version
         rm_region = e.rm_region
-        self.lag = e.lag
 
         file_name = os.path.join(self.region,
                                  f'{self.region}_{representative_region}_period_{period_version}_rmgroup_{rm_region}_xai')
@@ -115,7 +121,7 @@ class XAIDataset(ABC):
         data_flag, dataset_datetime = self._date_check(start_date, target_date)
         dataset_datetime = dataset_datetime.tolist()
         assert data_flag in [
-            2], f"해당되는 predict_date가 데이터셋에 존재하지 않습니다. 현재 데이터 셋 포함 기간: ({dataset_datetime[0].date()}~{dataset_datetime[-1].date()}\n"
+            2], f"해당되는 predict_date가 데이터셋에 존재하지 않습니다. 현재 데이터 셋 포함 기간: ({dataset_datetime[0].date()}~{dataset_datetime[-1].date()})\n"
 
         mask = ((self.obs['datetime'] >= start_date) & (self.obs['datetime'] <= target_date))
         num_mask = ((self.num['datetime'] >= target_date - pd.Timedelta(hours=15)) &
@@ -124,7 +130,6 @@ class XAIDataset(ABC):
         obs_X = self.obs.loc[mask]
         fnl_X = self.fnl.loc[mask]
         fnl_X = fnl_X.iloc[:-2]
-
         num_X = self.num.loc[num_mask]
         if self.horizon > 3:
             horizon_day = num_X[num_X.RAW_FDAY == self.horizon]
