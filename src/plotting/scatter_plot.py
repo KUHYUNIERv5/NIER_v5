@@ -341,10 +341,126 @@ def _scatter_phase2(region, result_df, cmaq_data=None, r4_result_df=None, pm='PM
     ax.axhline(r4_result_q.pod.values[0], linestyle='--', color=sns.color_palette('bright')[2])
     ax.axvline(r4_result_q.far.values[0], linestyle='--', color=sns.color_palette('bright')[2])
 
-    plt.legend(handles=fig_list, title='num scenario', loc='center right', bbox_to_anchor=(1.0, 0.78),
+    plt.legend(handles=fig_list, title='cls/reg', loc='center right', bbox_to_anchor=(1.0, 0.78),
                prop=dict(size=15))
     plt.show()
 
+def _scatter_phase2_compare(region, result_df, cmaq_data=None, r4_result_df=None, pm='PM10', horizon=4, top_prob=0, top_models = None, year=2021, check_column='lag'):
+    pm_map = dict(
+        PM10='PM 10',
+        PM25='PM 2.5'
+    )
+
+    str_expr = f"(predict_region == '{region}') and (pm_type == '{pm}') and (horizon == {horizon})"
+
+    cmaqdf_q = cmaq_data.query(str_expr)
+    result_q = result_df.query(str_expr)
+    r4_result_q = r4_result_df.query(str_expr)
+
+    check_columns = result_q[check_column].unique()
+    check_columns = np.sort(check_columns)
+    # mpl.rc('figure', figsize=[8, 8])
+    # mpl.rc('lines', markersize=8)
+
+    mpl.rc('xtick', labelsize=13)
+    mpl.rc('axes', labelsize=15)
+    cm = plt.cm.get_cmap('jet')
+    fig, ax = plt.subplots(figsize=[15, 12])
+
+    ax.set_xlim(-0.05, 1.05)
+    ax.set_ylim(-0.05, 1.05)
+    ax.set_xlabel('FAR')
+    ax.set_ylabel('POD')
+    ax.set_title(f"{year} {region} {pm_map[pm]} POD and FAR of horizon {horizon}")
+    fig_list = []
+    max_loc_list = []
+
+    marker_list = ['1', '+', '2', 'x', '3', '^', '4']
+    label_list = [f'{check_column} {val}' for val in check_columns]
+
+    ### top_prob_k
+    boundary_value = result_q.val_f1.quantile(1 - top_prob)  # 상위 % 값 추출
+    top_model_data = result_q.loc[result_q.val_f1 >= boundary_value]
+
+    for i, column_val in enumerate(check_columns):
+        test_data = result_q[result_q[check_column] == column_val]
+
+        # r4 best f1 annotate
+        idx = test_data['val_f1'].argmax()
+        max_loc_list.append(test_data.iloc[idx])
+        # r4_max_loc = test_data.iloc[idx]
+        #     f1 = ax.scatter(x=test_data['far'], y=test_data['pod'], marker='1', vmin=0, vmax=1, label='r4', c=test_data.f1, cmap=cm, s=90, lw=1.5)
+        fig = ax.scatter(x=test_data['val_far'], y=test_data['val_pod'], marker=marker_list[i], vmin=0, vmax=1,
+                         label=label_list[i],
+                         color=sns.color_palette('bright')[i], s=80, lw=1.5)
+        fig_list.append(fig)
+
+    f1_max_far = [ml.val_far for ml in max_loc_list]
+    f1_max_pod = [ml.val_pod for ml in max_loc_list]
+    f1s = [ml.val_f1 for ml in max_loc_list]
+
+    ax.scatter(x=f1_max_far, y=f1_max_pod, marker='.', color='red', s=30, lw=1.5)
+
+    # top k percent scatter
+    if year == 2021:
+        topk_fig = ax.scatter(x=top_model_data['val_far'], y=top_model_data['val_pod'], marker='o', vmin=0, vmax=1,
+            label=f'top {top_prob*100}% (#{len(top_model_data)}) 2021 ',
+            c='None',
+            edgecolors='purple',
+            s=90, lw=1.5)
+        fig_list.append(topk_fig)
+    else:
+        if top_models is not None:
+            top_model_data_2022 = result_q.loc[top_models[horizon]]
+            topk_fig = ax.scatter(x=top_model_data_2022['val_far'], y=top_model_data_2022['val_pod'], marker='o', vmin=0, vmax=1,
+                       label=f'top {top_prob*100}% (#{len(top_model_data_2022)}) from 2021 ',
+                       c='None',
+                       edgecolors='purple',
+                       s=90, lw=1.5)
+            fig_list.append(topk_fig)
+
+    textstr = ''
+    for max_far, max_pod, f1, check_col in zip(f1_max_far, f1_max_pod, f1s, check_columns):
+        ax.annotate(f'{check_col}', xy=(max_far, max_pod), fontsize=14)
+        textstr += f'{check_col} f1 max:{f1:.3f}\n'
+
+    if not cmaqdf_q is None:
+        textstr = textstr + f'CMAQ f1 score:{cmaqdf_q.f1.values[0]:.3f}\n'
+
+    if not r4_result_q is None:
+        textstr = textstr + f'R4 Best f1 score:{r4_result_q.f1.values[0]:.3f}'
+
+    textbox = AnchoredText(textstr, loc='upper right', prop=dict(size=15), )
+    ax.add_artist(textbox)
+
+    if not cmaqdf_q is None:
+        if cmaqdf_q.far.values[0] == 1 and cmaqdf_q.pod.values[0] == 0:
+            f4 = ax.scatter(x=cmaqdf_q.far.values[0], y=cmaqdf_q.pod.values[0], marker='*',
+                            color=sns.color_palette('bright')[3], s=80, lw=1)
+
+            ax.axhline(cmaqdf_q.pod.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+            ax.axvline(cmaqdf_q.far.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+        else:
+            f4 = ax.scatter(x=cmaqdf_q.far.values[0], y=cmaqdf_q.pod.values[0], marker='*',
+                            color=sns.color_palette('bright')[3], s=80, lw=1)
+            ax.axhline(cmaqdf_q.pod.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+            ax.axvline(cmaqdf_q.far.values[0], linestyle='--', color=sns.color_palette('bright')[3])
+
+    f5 = ax.scatter(x=r4_result_q.far.values[0], y=r4_result_q.pod.values[0], marker='*',
+                    color=sns.color_palette('bright')[2], s=80, lw=1)
+    ax.axhline(r4_result_q.pod.values[0], linestyle='--', color=sns.color_palette('bright')[2])
+    ax.axvline(r4_result_q.far.values[0], linestyle='--', color=sns.color_palette('bright')[2])
+
+    plt.legend(handles=fig_list, title='cls/reg', loc='center right', bbox_to_anchor=(1.0, 0.78),
+               prop=dict(size=15))
+
+
+    save_dir = f"/workspace/local/results/v5_results/saved_fig/{region}_{pm}_{year}_{horizon}_t{top_prob}.png"
+    plt.savefig(save_dir, dpi=300, bbox_inches='tight')
+
+    plt.show()
+
+    return top_model_data.index
 
 def _co2_scatter(region, horizon_data, cmaq_data, pm='PM10', horizon=4, ):
     pm_map = dict(
@@ -673,3 +789,11 @@ def scatter_plotting_v1(region, data, cmaq_data=None, pm='PM10', horizon_list=[3
 def scatter_plotting(region, data, cmaq_data=None, r4_result_df=None, pm='PM10', horizon_list=[3, 4, 5, 6], check_column='lag'):
     for horizon in horizon_list:
         _scatter_phase2(region, data, cmaq_data, r4_result_df, pm=pm, horizon=horizon, check_column=check_column)
+
+def scatter_plotting_compare(region, data, cmaq_data=None, r4_result_df=None, pm='PM10', horizon_list=[3, 4, 5, 6], check_column='lag', top_prob=0, top_models_list=None, year=2021):
+    horizon_top_list = {h:None for h in range(3,7)}
+    for horizon in horizon_list:
+        top_models_idx = _scatter_phase2_compare(region, data, cmaq_data, r4_result_df, pm=pm, horizon=horizon, top_prob=top_prob,
+                                top_models=top_models_list, year=year, check_column=check_column)
+        horizon_top_list[horizon] = top_models_idx
+    return horizon_top_list
