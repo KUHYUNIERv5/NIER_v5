@@ -43,6 +43,8 @@ def concatenate_columns(cols):
     return conc
 
 def concatenate(array1, array2, axis=0):
+    if isinstance(array2, list):
+        array2 = np.array(array2)
     assert isinstance(array2, np.ndarray)
     if array1 is not None:
         assert isinstance(array1, np.ndarray)

@@ -29,6 +29,41 @@ import torch.nn.functional as F
 
 from tqdm import tqdm_notebook as tqdm
 
+
+def validation(outputs):
+    total_models = ['rnn_clf_year', 'rnn_reg_year', 'cnn_clf_year', 'cnn_reg_year']
+
+    total_validation = {}
+
+    for modeln in total_models:
+        total_validation[modeln] = {'label': [], 'pred': []}
+
+    for o in outputs:
+        for modeln in total_models:
+            total_validation[modeln]['label'].append(o[modeln]['label'])
+            total_validation[modeln]['pred'].append(o[modeln]['pred'])
+
+    best_f1 = -1
+    best_idx = 0
+    f1_result = {}
+    for i, v in enumerate(total_validation):
+        test = total_validation[v]
+
+        cfs_matrix = confusion_matrix(test['label'], test['pred'], labels=[0., 1.])
+
+        pod = 0. if np.sum(cfs_matrix[1, 1]) == 0 else np.sum(cfs_matrix[1, 1]) / (np.sum(cfs_matrix[1, 0]) +
+                                                                                   np.sum(cfs_matrix[1, 1]))
+        far = 1. if np.sum(cfs_matrix[0, 1]) + np.sum(cfs_matrix[1, 1]) == 0 else np.sum(cfs_matrix[0, 1]) / \
+                                                                                      (np.sum(
+                                                                                          cfs_matrix[0, 1]) + np.sum(
+                                                                                          cfs_matrix[1, 1]))
+
+        f1 = f1_score(test['label'], test['pred'])
+        f1_result[total_models[i]] = f1
+
+    return total_validation, f1_result
+
+
 DEVICE = "cuda:1"
 HORIZONS = range(1, 5)
 pm = 'pm10'

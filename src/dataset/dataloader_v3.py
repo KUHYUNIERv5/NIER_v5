@@ -72,11 +72,12 @@ class V3Dataset(Dataset):
         self.dec_X = whole_data['num'].reset_index()
         self.dec_X = self.dec_X.set_index(['RAW_DATE'])
 
-        self.max_length = (len(self.obs_X) - (
-                self.max_lag + self.validation_days + self.max_horizon) * self.timepoint_day - 1) // self.timepoint_day + 1
+        self.max_length = len(self.obs_X) // 4 - (self.max_lag + self.validation_days + self.max_horizon * 2)
+        #         self.max_length = (len(self.obs_X) - (
+        #                 self.max_lag + self.validation_days + self.max_horizon) * self.timepoint_day) // self.timepoint_day + 1
         idx_list = np.arange(self.max_length)
         self.original_idx_list = idx_list * self.timepoint_day + 3 + self.timepoint_day * (
-                self.max_lag + self.validation_days)
+                self.max_lag + self.validation_days + self.max_horizon)
         self._thresholding()
 
     def _thresholding(self):
@@ -86,7 +87,7 @@ class V3Dataset(Dataset):
         for i, threshold in enumerate(self.threshold_dict[self.pm_type]):
             self.y_cls[self.original_y > threshold] = i + 1
 
-    def _generate_validation(self, original_idx, prediction_date, prediction_idx):
+    def _generate_validation(self, original_idx):
         obs_batch = []
         fnl_batch = []
         num_batch = []
@@ -95,8 +96,10 @@ class V3Dataset(Dataset):
         y_idxs = []
 
         for day in range(self.validation_days):
-            start_idx = original_idx - self.timepoint_day * ((self.validation_days - day) + self.lag)
-            end_idx = original_idx - self.timepoint_day * (self.validation_days - day)
+            start_diff = (self.validation_days - day) + self.horizon + self.lag - 1
+            start_idx = original_idx - self.timepoint_day * start_diff
+            end_diff = self.validation_days - day + self.horizon - 1
+            end_idx = original_idx - self.timepoint_day * end_diff
             y_idx = end_idx + self.timepoint_day * self.horizon - 1
             y_idxs.append(y_idx)
 
@@ -114,7 +117,7 @@ class V3Dataset(Dataset):
                 horizon_day = torch.from_numpy(horizon_day.to_numpy()).squeeze().float()
 
             else:
-                num_window = num_window[num_window.RAW_FDAY.between(1, 4)]
+                num_window = num_window[num_window.RAW_FDAY.between(1, 3)]
 
             num_window = num_window.drop(['RAW_TIME', 'RAW_FDAY'], axis=1)
 
@@ -148,9 +151,7 @@ class V3Dataset(Dataset):
         prediction_idx = original_idx - 1
 
         obs_batch, fnl_batch, num_batch, y_batch, y_orig_batch, y_cls_batch, horizon_day_batch = self._generate_validation(
-            original_idx,
-            prediction_date,
-            prediction_idx)
+            original_idx)
 
         pred_obs = self.obs_X.iloc[prediction_idx - self.timepoint_day * self.lag: prediction_idx]
         pred_fnl = self.fnl_X.iloc[prediction_idx - self.timepoint_day * self.lag: prediction_idx - 2]
@@ -163,7 +164,7 @@ class V3Dataset(Dataset):
             horizon_day = torch.from_numpy(horizon_day.to_numpy()).squeeze().float()
 
         else:
-            pred_num = pred_num[pred_num.RAW_FDAY.between(1, 4)]
+            pred_num = pred_num[pred_num.RAW_FDAY.between(1, 3)]
 
         pred_num = pred_num.drop(['RAW_TIME', 'RAW_FDAY'], axis=1)
 

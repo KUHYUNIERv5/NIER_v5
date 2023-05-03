@@ -17,7 +17,7 @@ from sklearn.metrics import confusion_matrix
 
 from tqdm.auto import tqdm
 from copy import deepcopy
-
+from collections import Counter
 from torch.utils.data import Dataset, DataLoader
 import torch
 
@@ -27,6 +27,8 @@ class V3_Runner:
                  device='cpu',
                  data_dir='/workspace/R5_phase2/',
                  root_dir='/workspace/results/v5_phase2/',
+                 r4_dir='/workspace/results/v3_um_r4to_r5',
+                 cmaq_dir='/workspace/results/v3_cmaq/',
                  inference_type=2022,
                  pm_type='PM10',
                  horizon=3,
@@ -42,6 +44,8 @@ class V3_Runner:
         self.device = device
         self.data_dir = data_dir
         self.root_dir = root_dir
+        self.r4_dir = r4_dir
+        self.cmaq_dir = cmaq_dir
         self.inference_type = inference_type
         self.debug = debug
         self.pm_type = pm_type
@@ -49,33 +53,38 @@ class V3_Runner:
         self.validation_days = validation_days
         self.ensemble = ensemble
         self.num_ensemble_models = num_ensemble_models
+        self.model_num = model_num
         self.add_r4_models = add_r4_models
 
         self.root_dir = os.path.join(root_dir, region)
-        self.model_dir = os.path.join(root_dir, 'models')
-        self.tmp_dir = os.path.join(root_dir, 'tmp')
-        self.csv_dir = os.path.join(root_dir, 'id_list.csv')
+        self.model_dir = os.path.join(self.root_dir, 'models')
+        self.tmp_dir = os.path.join(self.root_dir, 'tmp')
+        self.csv_dir = os.path.join(self.root_dir, 'id_list.csv')
 
-        str_expr = f"(predict_region == '{region}') and (pm_type == '{pm_type}') and (horizon == {horizon})"
-        exp_settings = pd.read_csv(self.csv_dir)
-        self.exp_settings = exp_settings.query(str_expr)
-
-        self.exp_idxs = np.random.permutation(len(self.exp_settings))[:model_num] # 임시 코드
-
+        # str_expr = f"(predict_region == '{region}') and (pm_type == '{pm_type}') and (horizon == {horizon})"
+        # exp_settings = pd.read_csv(self.csv_dir)
+        # self.exp_settings = exp_settings.query(str_expr)
+        self.exp_settings = self._make_top_exps()
+        self.r4_res = None
+        # TODO: update load_data_model() function to laod best performance models
         self.dataset_bundles, self.model_pools, self.max_length, self.model_load_times, self.data_load_times = self._load_data_model()
 
+    def hard_voting(self, predictions):
+        votes = Counter(predictions)
+        winner = votes.most_common(1)[0][0]
+        return winner
 
     def _load_data_model(self):
-        now = time.time()
+        start_time = time.time()
         dataset_bundles = []
         model_pools = []
         model_load_times = []
         data_load_times = []
 
-        for i in self.exp_idxs: # 임시 코드임
+        for i in tqdm(range(self.model_num)):  # 임시 코드임
             now = time.time()
-            e = self.exp_settings.iloc[i] # 임시 코드임
-            esv_year = 2021 # 임시 코드임
+            e = self.exp_settings.iloc[i]
+            esv_year = e.esv_year
 
             model_file_name = f'{e.id}.pkl'
             model_data = load_data(os.path.join(self.model_dir, model_file_name))
@@ -95,7 +104,7 @@ class V3_Runner:
                 data_path=self.data_dir,
                 lag=e.lag,
                 max_lag=7,
-                horizon=e.horizon,
+                horizon=self.horizon,
                 validation_days=self.validation_days
             )
 
@@ -103,16 +112,19 @@ class V3_Runner:
             dataset_bundles.append(dataset)
             data_load_times.append(time.time() - now)
         max_length = dataset_bundles[0].max_length
-        print(f'Model & Dataset load took: {time.time() - now:.2f} s')
+        self.r4_res = load_data(
+            os.path.join(self.r4_dir, f'{self.region}_{self.pm_type}_horizon{self.horizon}_r4v3_result.pkl'))
+        print(f'Model & Dataset load took: {time.time() - start_time:.2f} s')
         return dataset_bundles, model_pools, max_length, model_load_times, data_load_times
 
-    def _evaluation(self, y_list, pred_list):
+    def _evaluation(self, y_list, pred_list, is_r4=False):
         """
         **필요시 변경해야 함(현재는 단기 팀 세팅 따름)**
         :param y_list: true values
         :param pred_list: predicted values
         :return: object (accuracy, hit, pod, far, f1)
         """
+
         cfs_matrix = confusion_matrix(y_list, pred_list, labels=[0., 1., 2., 3.])
 
         accuracy = np.trace(cfs_matrix) / np.sum(cfs_matrix)
@@ -136,6 +148,42 @@ class V3_Runner:
             f1=f1
         )
 
+    def _make_top_exps(self):
+        model_types = {
+            'cls_rnn': {
+                'run_type': 'classification',
+                'model': 'RNN'
+            },
+            'cls_cnn': {
+                'run_type': 'classification',
+                'model': 'CNN'
+            },
+            'reg_rnn': {
+                'run_type': 'regression',
+                'model': 'RNN'
+            },
+            'reg_cnn': {
+                'run_type': 'regression',
+                'model': 'CNN'
+            },
+        }
+        results = pd.read_excel(os.path.join(self.root_dir, f'{self.region}_2021inference.xlsx'), index_col=0)
+        sorted_result = results[results.val_f1 < 1].sort_values('val_f1', ascending=False)
+
+        top_100_exp = []
+
+        for key in model_types.keys():
+            model_type = model_types[key]
+            expr = f"(run_type == '{model_type['run_type']}') and (model == '{model_type['model']}') and (predict_region == '{self.region}') and (pm_type == '{self.pm_type}') and (horizon == {self.horizon})"
+            res = sorted_result.query(expr)
+
+            top_100_exp.append(res.iloc[:25])
+
+        top_100_exp = pd.concat(top_100_exp)
+        top_100_exp = top_100_exp.reset_index(drop=True)
+
+        return top_100_exp
+
     def run_v3_batch(self, data, net, scale, mean, is_reg):
         (obs_batch, fnl_batch, num_batch, y_batch, y_orig_batch, y_cls_batch, horizon_batch), _, prediction_date = data
 
@@ -156,29 +204,28 @@ class V3_Runner:
             point_num = horizon_batch.to(self.device).float()
 
         if is_reg:
-            y = y_batch.to(self.device).float()
-            orig_y = y_orig_batch.to(self.device).float()
+            y = y_orig_batch
         else:
-            y = y_cls_batch.to(self.device).long()
+            y = y_cls_batch
 
         x_pred = net(obs_batch, fnl_batch, num_batch, point_num)
 
         if is_reg:
             x_pred = x_pred.squeeze(-1) if x_pred.shape[0] == 1 else x_pred.squeeze()
             original_pred_list = x_pred.detach().clone().cpu().numpy()
-            y_list = concatenate(y_list, orig_y.detach().clone().cpu().numpy())
             pred_list = concatenate(pred_list, x_pred.detach().clone().cpu().numpy() * scale + mean)
+            y_list = concatenate(y_list, y.detach().clone().cpu().numpy())
         else:
             preds = x_pred.argmax(dim=1)
-            y_list = concatenate(y_list, y.detach().clone().cpu().numpy())
             pred_list = concatenate(pred_list, preds.detach().clone().cpu().numpy())
             original_pred_list = concatenate(original_pred_list, x_pred.detach().clone().cpu().numpy(), axis=0)
+            y_list = concatenate(y_list, y.detach().clone().cpu().numpy())
 
         return original_pred_list, pred_list, y_list, prediction_date
 
     def run_v3_single(self, data, net, scale, mean, is_reg):
         _, (pred_obs, pred_fnl, pred_num, pred_y, pred_y_original, pred_y_cls, horizon_day), prediction_date = data
-
+        original_pred = None
         net.eval()
 
         pred_obs = pred_obs.to(self.device).float().unsqueeze(0)
@@ -192,31 +239,28 @@ class V3_Runner:
             point_num = horizon_day.to(self.device).float().unsqueeze(0)
 
         if is_reg:
-            y = pred_y.to(self.device).float()
-            orig_y = pred_y_original.to(self.device).float()
+            y = pred_y_original
         else:
-            y = pred_y.to(self.device).long()
+            y = pred_y_cls
 
         pred_obs = torch.cat([pred_obs, pred_obs])
         pred_fnl = torch.cat([pred_fnl, pred_fnl])
         pred_num = torch.cat([pred_num, pred_num])
         point_num = torch.cat([point_num, point_num])
-        #     print('v3 single: ', pred_obs.shape, pred_fnl.shape, pred_num.shape, point_num.shape, y.shape)
+
         x_pred = net(pred_obs, pred_fnl, pred_num, point_num)
         x_pred = x_pred[0].unsqueeze(0)
-        #     print('v3 single res', x_pred.shape, x_pred[0].unsqueeze(0).shape)
-        #     x_pred = new_forward(net, pred_obs, pred_fnl, pred_num, point_num, is_reg, is_double)
         if is_reg:
             x_pred = x_pred.squeeze(-1) if x_pred.shape[0] == 1 else x_pred.squeeze()
             original_pred = x_pred.detach().clone().cpu().numpy()
             pred = x_pred.detach().clone().cpu().numpy() * scale + mean
-            y = orig_y.detach().clone().cpu().numpy()
         else:
             preds = x_pred.argmax(dim=1)
             pred = preds.detach().clone().cpu().numpy()
-            y = y.detach().clone().cpu().numpy()
             original_pred = x_pred.detach().clone().cpu().numpy()
-        #     print('v3 single ret', original_pred.shape, pred.shape, y.shape)
+
+        y = y.detach().numpy()
+
         return original_pred, pred, y, prediction_date
 
     def _thresholding(self, array, thresholds):
@@ -226,91 +270,56 @@ class V3_Runner:
             y_cls[y > threshold] = i + 1
         return y_cls
 
-    def run_v3(self):
-        final_pred = []
-        final_label = []
+    def _v3_validation(self, day_idx):
+        f1_list = []
+        for j, (model, data) in enumerate(zip(self.model_pools, self.dataset_bundles)):
+            e = self.exp_settings.iloc[j]
+            pm_type = e.pm_type
+            is_reg = True if e.run_type == 'regression' else False
 
-        validation_times = []
-        inference_times = []
-        total_times = []
+            test_orig_pred, test_pred, test_label, prediction_date = self.run_v3_batch(data[day_idx], model, data.scale,
+                                                                                       data.mean, is_reg)
 
-        for i in tqdm(range(self.max_length)):
-            f1_list = []
-            now = time.time()
+            if is_reg:
+                test_pred_score = self._thresholding(test_pred, data.threshold_dict[pm_type])
+                test_label_score = self._thresholding(test_label, data.threshold_dict[pm_type])
+            else:
+                test_pred_score = test_pred
+                test_label_score = test_label
 
-            # validation
-            for j, (model, data) in enumerate(zip(self.model_pools, self.dataset_bundles)):
-                e = self.exp_settings.iloc[self.exp_idxs[j]]
+            test_score = self._evaluation(test_label_score, test_pred_score)
 
-                representative_region = e.representative_region
-                period_version = e.period_version
-                rm_region = e.rm_region
+            f1_list.append(test_score['f1'])
+
+        model_len = len(f1_list)
+
+        return f1_list, model_len
+
+    def _handle_r4(self, day_idx, retrieve_key=None, valid=True):
+        r4_res_day = self.r4_res[day_idx]
+        if valid:
+            return list(r4_res_day['valid_result'].values()), list(r4_res_day['valid_result'].keys())
+        else:
+            assert retrieve_key is not None, 'must add retrieve_keys'
+            if 'clf' in retrieve_key:
+                return int(r4_res_day['test_result'][retrieve_key]['label'])
+            else:
+                return float(r4_res_day['test_result'][retrieve_key]['pred_score'])
+
+    def _v3_test(self, argsorts, idx_to_key, day_idx, model_len):
+        # ensemble model
+        ensemble_label = None
+        ensemble_pred = None
+        data = self.dataset_bundles[argsorts[0]]
+        for arg_idx in argsorts:
+
+            if arg_idx < model_len:  # r5 models
+                data = self.dataset_bundles[arg_idx]
+                model = self.model_pools[arg_idx]
+                e = self.exp_settings.iloc[arg_idx]
                 pm_type = e.pm_type
-                sampling = e.sampling
-                horizon = e.horizon
-                lag = e.lag
-                model_name = e.model
-                model_type = e.model_type
                 is_reg = True if e.run_type == 'regression' else False
-
-                file_name = f'{self.region}_{representative_region}_period_{period_version}_rmgroup_{rm_region}_v3'
-
-                test_orig_pred, test_pred, test_label, prediction_date = self.run_v3_batch(data[i], model, data.scale,
-                                                                                      data.mean, is_reg)
-
-                if is_reg:
-                    test_pred_score = self._thresholding(test_pred, data.threshold_dict[pm_type])
-                    test_label_score = self._thresholding(test_label, data.threshold_dict[pm_type])
-                else:
-                    test_pred_score = test_pred
-                    test_label_score = test_label
-
-                test_score = self._evaluation(test_label_score, test_pred_score)
-
-                f1_list.append(test_score['f1'])
-            validation_times.append(time.time() - now)
-            test_now = time.time()
-
-            # test
-            if np.mean(f1_list) <= 0:
-                argsorts = np.random.permutation(len(self.model_pools))
-            else:
-                argsorts = np.argsort(f1_list)
-
-            if self.ensemble:
-                ensemble_label = None
-                ensemble_pred = None
-                for j in range(self.num_ensemble_models):
-                    data = self.dataset_bundles[argsorts[j]]
-                    model = self.model_pools[argsorts[j]]
-                    e = self.exp_settings.iloc[self.exp_idxs[argsorts[j]]]
-                    is_reg = True if e.run_type == 'regression' else False
-
-                    test_orig_pred, test_pred, test_label, prediction_date = self.run_v3_single(data[i], model, data.scale,
-                                                                                           data.mean, is_reg)
-
-                    if is_reg:
-                        test_pred_score = self._thresholding(test_pred, data.threshold_dict[pm_type])
-                        test_label_score = self._thresholding(test_label, data.threshold_dict[pm_type])
-                    else:
-                        test_pred_score = test_pred
-                        test_label_score = test_label
-
-                    if j == 0:
-                        ensemble_label = test_label_score
-                    ensemble_pred = concatenate(ensemble_pred, test_pred_score)
-                    ensemble_label = concatenate(ensemble_label, test_label_score)
-
-                final_pred.append(ensemble_pred)
-                final_label.append(ensemble_label)
-            else:
-                data = self.dataset_bundles[argsorts[0]]
-                model = self.model_pools[argsorts[0]]
-                e = self.exp_settings.iloc[self.exp_idxs[argsorts[0]]]
-
-                is_reg = True if e.run_type == 'regression' else False
-                is_double = True if e.model_type == 'double' else False
-                test_orig_pred, test_pred, test_label, prediction_date = self.run_v3_single(data[i], model, data.scale,
+                test_orig_pred, test_pred, test_label, prediction_date = self.run_v3_single(data[day_idx], model, data.scale,
                                                                                        data.mean, is_reg)
 
                 if is_reg:
@@ -320,16 +329,89 @@ class V3_Runner:
                     test_pred_score = test_pred
                     test_label_score = test_label
 
-                final_pred.append(test_pred_score)
-                final_label.append(test_label_score)
+                if len(test_pred_score.shape) == 0:
+                    test_pred_score = np.array([int(test_pred_score)])
+                    test_label_score = np.array([int(test_label_score)])
+
+                ensemble_pred = concatenate(ensemble_pred, test_pred_score)
+                ensemble_label = concatenate(ensemble_label, test_label_score)
+            elif arg_idx == model_len + 4:
+                pass
+            else:  # r4
+                score = self._handle_r4(day_idx, idx_to_key[f'{arg_idx}'], valid=False)
+                if type(score) is float:
+                    test_pred_score = self._thresholding(score, data.threshold_dict[self.pm_type])
+                else:
+                    test_pred_score = score
+                ensemble_pred = concatenate(ensemble_pred, np.array([test_pred_score]))
+
+        ensemble_label = int(ensemble_label[0])
+        ensembled_prediction = self.hard_voting(ensemble_pred)
+
+        # best model
+        data = self.dataset_bundles[argsorts[0]]
+        model = self.model_pools[argsorts[0]]
+        e = self.exp_settings.iloc[argsorts[0]]
+
+        is_reg = True if e.run_type == 'regression' else False
+        test_orig_pred, test_pred, test_label, prediction_date = self.run_v3_single(data[day_idx], model, data.scale,
+                                                                               data.mean, is_reg)
+
+        print(type(test_pred_score), test_pred_score)
+
+        if not isinstance(test_pred_score, int) or not isinstance(test_pred_score, float):
+            test_pred_score = int(test_pred_score[0])
+
+        return ensembled_prediction, test_pred_score, ensemble_label
+
+    def run_v3(self, top_k=9):
+        ensemble_prediction_ls = []
+        single_prediction_ls = []
+        label_ls = []
+
+        validation_times = []
+        inference_times = []
+        total_times = []
+
+        for i in tqdm(range(self.max_length)):
+            now = time.time()
+            ####### validation #######
+            f1_list, model_len = self._v3_validation(i)
+
+            # r4 models
+            r4_f1_list, key_list = self._handle_r4(i, valid=True)
+            idx_to_key = {}
+            for key_i, key in enumerate(key_list):
+                idx_to_key[f'{model_len + key_i}'] = key
+            f1_list = np.concatenate([f1_list, r4_f1_list])
+            # TODO: cmaq append f1 score
+            # f1_list.append(cmaq_result[i])
+
+            validation_times.append(time.time() - now)
+            test_now = time.time()
+
+            ####### test #######
+            if np.mean(f1_list) <= 0:
+                argsorts = np.random.permutation(len(self.model_pools))
+            else:
+                argsorts = np.argsort(f1_list)
+
+            argsorts = argsorts[:top_k]
+
+            ensembled_pred, single_pred, label = self._v3_test(argsorts, idx_to_key=idx_to_key, day_idx=i, model_len=model_len)
+
+            ensemble_prediction_ls.append(ensembled_pred)
+            single_prediction_ls.append(single_pred)
+            label_ls.append(label)
+
             inference_times.append(time.time() - test_now)
             total_times.append(time.time() - now)
 
-        return inference_times, total_times
+        return ensemble_prediction_ls, single_prediction_ls, label_ls, validation_times, inference_times, total_times
 
 
 def main():
-    best_config = './data_folder/best_model.csv'
+
     pass
 
 # if __name__ == "__main__":
