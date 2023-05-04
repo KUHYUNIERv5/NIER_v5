@@ -37,7 +37,8 @@ class V3_Runner:
                  num_ensemble_models=10,
                  debug=True,
                  num_model_per_type=25,
-                 add_r4_models=True):
+                 add_r4_models=True,
+                 add_cmaq_model=True):
         super().__init__()
 
         self.region = region
@@ -55,6 +56,7 @@ class V3_Runner:
         self.num_ensemble_models = num_ensemble_models
         self.num_model_per_type = num_model_per_type
         self.add_r4_models = add_r4_models
+        self.add_cmaq_model = add_cmaq_model
 
         self.root_dir = os.path.join(root_dir, region)
         self.model_dir = os.path.join(self.root_dir, 'models')
@@ -347,7 +349,7 @@ class V3_Runner:
 
                 ensemble_pred = concatenate(ensemble_pred, test_pred_score)
                 ensemble_label = concatenate(ensemble_label, test_label_score)
-            elif arg_idx == model_len + 4:
+            elif arg_idx == model_len + 4 and self.add_cmaq_model:
                 # cmaq
                 score = self._handle_cmaq(day_idx, valid=False)
                 test_pred_score = self._thresholding(np.array([score]), data.threshold_dict[self.pm_type])
@@ -410,23 +412,23 @@ class V3_Runner:
             f1_list, model_len = self._v3_validation(i)
 
             # r4 models
-            r4_f1_list, key_list = self._handle_r4(i, valid=True)
-            idx_to_key = {}
-            for key_i, key in enumerate(key_list):
-                idx_to_key[f'{model_len + key_i}'] = key
-            f1_list = np.concatenate([f1_list, r4_f1_list])
-            # TODO: cmaq append f1 score
-            # f1_list.append(cmaq_result[i])
+            if self.add_r4_models:
+                r4_f1_list, key_list = self._handle_r4(i, valid=True)
+                idx_to_key = {}
+                for key_i, key in enumerate(key_list):
+                    idx_to_key[f'{model_len + key_i}'] = key
+                f1_list = np.concatenate([f1_list, r4_f1_list])
             # cmaq models
-            cmaq_f1 = self._handle_cmaq(i, valid=True)
-            f1_list = np.concatenate([f1_list, [cmaq_f1]])
+            if self.add_cmaq_model:
+                cmaq_f1 = self._handle_cmaq(i, valid=True)
+                f1_list = np.concatenate([f1_list, [cmaq_f1]])
 
             validation_times.append(time.time() - now)
             test_now = time.time()
 
             ####### test #######
             if np.mean(f1_list) <= 0:
-                argsorts = np.random.permutation(self.model_num + 5)
+                argsorts = np.random.permutation(len(f1_list))
             else:
                 argsorts = np.argsort(f1_list)
 
