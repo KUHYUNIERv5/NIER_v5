@@ -36,7 +36,7 @@ class V3_Runner:
                  ensemble=True,
                  num_ensemble_models=10,
                  debug=True,
-                 model_num=100,
+                 num_model_per_type=25,
                  add_r4_models=True):
         super().__init__()
 
@@ -53,7 +53,7 @@ class V3_Runner:
         self.validation_days = validation_days
         self.ensemble = ensemble
         self.num_ensemble_models = num_ensemble_models
-        self.model_num = model_num
+        self.num_model_per_type = num_model_per_type
         self.add_r4_models = add_r4_models
 
         self.root_dir = os.path.join(root_dir, region)
@@ -65,7 +65,9 @@ class V3_Runner:
         # exp_settings = pd.read_csv(self.csv_dir)
         # self.exp_settings = exp_settings.query(str_expr)
         self.exp_settings = self._make_top_exps()
+        self.model_num = len(self.exp_settings)
         self.r4_res = None
+        self.cmaq_res = None
         # TODO: update load_data_model() function to laod best performance models
         self.dataset_bundles, self.model_pools, self.max_length, self.model_load_times, self.data_load_times = self._load_data_model()
 
@@ -114,6 +116,8 @@ class V3_Runner:
         max_length = dataset_bundles[0].max_length
         self.r4_res = load_data(
             os.path.join(self.r4_dir, f'{self.region}_{self.pm_type}_horizon{self.horizon}_r4v3_result.pkl'))
+        self.cmaq_res = load_data(
+            os.path.join(self.cmaq_dir, f'{self.region}_{self.pm_type}_horizon{self.horizon}_v3cmaq_result.pkl'))
         print(f'Model & Dataset load took: {time.time() - start_time:.2f} s')
         return dataset_bundles, model_pools, max_length, model_load_times, data_load_times
 
@@ -148,6 +152,13 @@ class V3_Runner:
             f1=f1
         )
 
+    def _thresholding(self, array, thresholds):
+        y = array.squeeze()
+        y_cls = np.zeros_like(y)
+        for i, threshold in enumerate(thresholds):
+            y_cls[y > threshold] = i + 1
+        return y_cls
+
     def _make_top_exps(self):
         model_types = {
             'cls_rnn': {
@@ -177,7 +188,7 @@ class V3_Runner:
             expr = f"(run_type == '{model_type['run_type']}') and (model == '{model_type['model']}') and (predict_region == '{self.region}') and (pm_type == '{self.pm_type}') and (horizon == {self.horizon})"
             res = sorted_result.query(expr)
 
-            top_100_exp.append(res.iloc[:25])
+            top_100_exp.append(res.iloc[:self.num_model_per_type])
 
         top_100_exp = pd.concat(top_100_exp)
         top_100_exp = top_100_exp.reset_index(drop=True)
@@ -263,26 +274,18 @@ class V3_Runner:
 
         return original_pred, pred, y, prediction_date
 
-    def _thresholding(self, array, thresholds):
-        y = array.squeeze()
-        y_cls = np.zeros_like(y)
-        for i, threshold in enumerate(thresholds):
-            y_cls[y > threshold] = i + 1
-        return y_cls
-
     def _v3_validation(self, day_idx):
         f1_list = []
         for j, (model, data) in enumerate(zip(self.model_pools, self.dataset_bundles)):
             e = self.exp_settings.iloc[j]
-            pm_type = e.pm_type
             is_reg = True if e.run_type == 'regression' else False
 
             test_orig_pred, test_pred, test_label, prediction_date = self.run_v3_batch(data[day_idx], model, data.scale,
                                                                                        data.mean, is_reg)
 
             if is_reg:
-                test_pred_score = self._thresholding(test_pred, data.threshold_dict[pm_type])
-                test_label_score = self._thresholding(test_label, data.threshold_dict[pm_type])
+                test_pred_score = self._thresholding(test_pred, data.threshold_dict[self.pm_type])
+                test_label_score = self._thresholding(test_label, data.threshold_dict[self.pm_type])
             else:
                 test_pred_score = test_pred
                 test_label_score = test_label
@@ -306,25 +309,34 @@ class V3_Runner:
             else:
                 return float(r4_res_day['test_result'][retrieve_key]['pred_score'])
 
+    def _handle_cmaq(self, day_idx, valid=True):
+        cmaq_res_day = self.cmaq_res[day_idx]
+        if valid:
+            return cmaq_res_day['valid_result']
+        else:
+            return float(cmaq_res_day['test_result']['pred_score'])
+
     def _v3_test(self, argsorts, idx_to_key, day_idx, model_len):
         # ensemble model
         ensemble_label = None
         ensemble_pred = None
-        data = self.dataset_bundles[argsorts[0]]
+        if argsorts[0] > self.model_num - 1:
+            data = self.dataset_bundles[0]
+        else:
+            data = self.dataset_bundles[argsorts[0]]
         for arg_idx in argsorts:
-
             if arg_idx < model_len:  # r5 models
                 data = self.dataset_bundles[arg_idx]
                 model = self.model_pools[arg_idx]
                 e = self.exp_settings.iloc[arg_idx]
-                pm_type = e.pm_type
+
                 is_reg = True if e.run_type == 'regression' else False
                 test_orig_pred, test_pred, test_label, prediction_date = self.run_v3_single(data[day_idx], model, data.scale,
                                                                                        data.mean, is_reg)
 
                 if is_reg:
-                    test_pred_score = self._thresholding(test_pred, data.threshold_dict[pm_type])
-                    test_label_score = self._thresholding(test_label, data.threshold_dict[pm_type])
+                    test_pred_score = self._thresholding(test_pred, data.threshold_dict[self.pm_type])
+                    test_label_score = self._thresholding(test_label, data.threshold_dict[self.pm_type])
                 else:
                     test_pred_score = test_pred
                     test_label_score = test_label
@@ -336,11 +348,14 @@ class V3_Runner:
                 ensemble_pred = concatenate(ensemble_pred, test_pred_score)
                 ensemble_label = concatenate(ensemble_label, test_label_score)
             elif arg_idx == model_len + 4:
-                pass
+                # cmaq
+                score = self._handle_cmaq(day_idx, valid=False)
+                test_pred_score = self._thresholding(np.array([score]), data.threshold_dict[self.pm_type])
+                ensemble_pred = concatenate(ensemble_pred, np.array([test_pred_score]))
             else:  # r4
                 score = self._handle_r4(day_idx, idx_to_key[f'{arg_idx}'], valid=False)
                 if type(score) is float:
-                    test_pred_score = self._thresholding(score, data.threshold_dict[self.pm_type])
+                    test_pred_score = self._thresholding(np.array([score]), data.threshold_dict[self.pm_type])
                 else:
                     test_pred_score = score
                 ensemble_pred = concatenate(ensemble_pred, np.array([test_pred_score]))
@@ -349,18 +364,34 @@ class V3_Runner:
         ensembled_prediction = self.hard_voting(ensemble_pred)
 
         # best model
-        data = self.dataset_bundles[argsorts[0]]
-        model = self.model_pools[argsorts[0]]
-        e = self.exp_settings.iloc[argsorts[0]]
+        if argsorts[0] > self.model_num - 1:
+            if argsorts[0] == model_len + 4:  # cmaq
+                data = self.dataset_bundles[0]
+                score = self._handle_cmaq(day_idx, valid=False)
+                test_pred_score = self._thresholding(np.array([score]), data.threshold_dict[self.pm_type])
+            else:  # r4 model
+                score = self._handle_r4(day_idx, idx_to_key[f'{argsorts[0]}'], valid=False)
+                if type(score) is float:
+                    test_pred_score = self._thresholding(np.array([score]), data.threshold_dict[self.pm_type])
+                else:
+                    test_pred_score = score
 
-        is_reg = True if e.run_type == 'regression' else False
-        test_orig_pred, test_pred, test_label, prediction_date = self.run_v3_single(data[day_idx], model, data.scale,
-                                                                               data.mean, is_reg)
+        else:
+            data = self.dataset_bundles[argsorts[0]]
+            model = self.model_pools[argsorts[0]]
+            e = self.exp_settings.iloc[argsorts[0]]
 
-        print(type(test_pred_score), test_pred_score)
+            is_reg = True if e.run_type == 'regression' else False
+            test_orig_pred, test_pred, test_label, prediction_date = self.run_v3_single(data[day_idx], model, data.scale,
+                                                                                   data.mean, is_reg)
 
-        if not isinstance(test_pred_score, int) or not isinstance(test_pred_score, float):
-            test_pred_score = int(test_pred_score[0])
+            if is_reg:
+                test_pred_score = self._thresholding(test_pred, data.threshold_dict[self.pm_type])
+            else:
+                test_pred_score = test_pred
+
+            if len(test_pred_score.shape) == 0:
+                test_pred_score = np.array([int(test_pred_score)])
 
         return ensembled_prediction, test_pred_score, ensemble_label
 
@@ -386,13 +417,16 @@ class V3_Runner:
             f1_list = np.concatenate([f1_list, r4_f1_list])
             # TODO: cmaq append f1 score
             # f1_list.append(cmaq_result[i])
+            # cmaq models
+            cmaq_f1 = self._handle_cmaq(i, valid=True)
+            f1_list = np.concatenate([f1_list, [cmaq_f1]])
 
             validation_times.append(time.time() - now)
             test_now = time.time()
 
             ####### test #######
             if np.mean(f1_list) <= 0:
-                argsorts = np.random.permutation(len(self.model_pools))
+                argsorts = np.random.permutation(self.model_num + 5)
             else:
                 argsorts = np.argsort(f1_list)
 
