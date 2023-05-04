@@ -211,8 +211,8 @@ def handle_xai_data(whole_data, region):
     return save_dicts
 
 
-def make_xai_dataset(data_dir):
-    regions = [f'R4_{i}' for i in np.arange(68, 78)]
+def make_xai_dataset(data_dir, regions=np.arange(68, 78)):
+    regions = [f'R4_{i}' for i in regions]
     for region in regions:
         region_dir = os.path.join(data_dir, region)
         for file in os.listdir(region_dir):
