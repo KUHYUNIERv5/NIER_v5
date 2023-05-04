@@ -216,12 +216,12 @@ def handle_v3_data(whole_data, predict_region):
     return v3_data_dict
 
 
-def make_v3_dataset(data_dir):
-    regions = [f'R4_{i}' for i in np.arange(68, 78)]
+def make_v3_dataset(data_dir, region_list=np.arange(68, 78)):
+    regions = [f'R4_{i}' for i in region_list]
     for region in regions:
         region_dir = os.path.join(data_dir, region)
         for file in os.listdir(region_dir):
-            if not '_v3' in file and file.endswith('.pkl'):
+            if not '_xai' in file and not '_v3' in file and file.endswith('.pkl'):
                 name = file.split('.')[0] + '_v3'
                 print(name)
                 whole_data = load_data(os.path.join(region_dir, file))
