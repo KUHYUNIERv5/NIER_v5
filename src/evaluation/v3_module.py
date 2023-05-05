@@ -451,9 +451,8 @@ class V3_Runner:
             if np.mean(f1_list) <= 0:
                 argsorts = np.random.permutation(len(f1_list) + num_additional_models)
             else:
-                argsorts = f1_list.argsort()[::-1][:]
-
-            f1_list_sorted = f1_list.sort()[::-1][:]
+                argsorts = np.argsort(f1_list)[::-1][:]
+            f1_list_sorted = np.sort(f1_list)[::-1][:]
             f1sort_list.append(f1_list_sorted)
             argsort_list.append(argsorts)
             argsort_exp_list.append(self.exp_settings.iloc[argsorts][self.result_columns])
