@@ -455,7 +455,10 @@ class V3_Runner:
             f1_list_sorted = np.sort(f1_list)[::-1][:]
             f1sort_list.append(f1_list_sorted)
             argsort_list.append(argsorts)
-            argsort_exp_list.append(self.exp_settings.iloc[argsorts][self.result_columns])
+
+            argsorts_ = [arg for arg in argsorts if arg < self.model_num]
+
+            argsort_exp_list.append(self.exp_settings.iloc[argsorts_][self.result_columns])
             argsorts_topk = argsorts[:top_k]
 
             ensembled_pred, single_pred, label = self._v3_test(argsorts_topk, idx_to_key=idx_to_key, day_idx=i,
