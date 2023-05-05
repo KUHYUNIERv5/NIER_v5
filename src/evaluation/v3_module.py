@@ -431,9 +431,9 @@ class V3_Runner:
             ####### validation #######
             f1_list, model_len = self._v3_validation(i)
             # r4 models
+            idx_to_key = {}
             if self.add_r4_models:
                 r4_f1_list, key_list = self._handle_r4(i, valid=True)
-                idx_to_key = {}
                 for key_i, key in enumerate(key_list):
                     idx_to_key[f'{model_len + key_i}'] = key
                 f1_list = np.concatenate([f1_list, r4_f1_list])
@@ -442,6 +442,7 @@ class V3_Runner:
             if self.add_cmaq_model:
                 cmaq_f1 = self._handle_cmaq(i, valid=True)
                 f1_list = np.concatenate([f1_list, [cmaq_f1]])
+                idx_to_key[f'{model_len + 5}'] = 'cmaq'
                 num_additional_models += 1
 
             validation_times.append(time.time() - now)
@@ -449,17 +450,13 @@ class V3_Runner:
 
             ####### test #######
             if np.mean(f1_list) <= 0:
-                argsorts = np.random.permutation(len(f1_list) + num_additional_models)
+                argsorts = np.random.permutation(len(f1_list))
             else:
                 argsorts = np.argsort(f1_list)[::-1][:]
             f1_list_sorted = np.sort(f1_list)[::-1][:]
-            f1sort_list.append(f1_list_sorted)
-            argsort_list.append(argsorts)
 
-            argsorts_ = [arg for arg in argsorts if arg < self.model_num]
-
-            argsort_exp_list.append(self.exp_settings.iloc[argsorts_][self.result_columns])
             argsorts_topk = argsorts[:top_k]
+            argsorts_ = [arg for arg in argsorts_topk if arg < self.model_num]
 
             ensembled_pred, single_pred, label = self._v3_test(argsorts_topk, idx_to_key=idx_to_key, day_idx=i,
                                                                model_len=model_len)
@@ -468,6 +465,9 @@ class V3_Runner:
             single_prediction_ls.append(single_pred)
             label_ls.append(label)
             argsort_topk_list.append(argsorts_topk)
+            f1sort_list.append(f1_list_sorted)
+            argsort_list.append(argsorts)
+            argsort_exp_list.append(self.exp_settings.iloc[argsorts_][self.result_columns])
 
             inference_times.append(time.time() - test_now)
             total_times.append(time.time() - now)
