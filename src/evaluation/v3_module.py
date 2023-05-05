@@ -20,7 +20,7 @@ from tqdm.auto import tqdm
 from copy import deepcopy
 from collections import Counter
 import torch
-from v3_returns import V3Output
+from src.evaluation.v3_returns import V3Output
 
 
 class V3_Runner:
