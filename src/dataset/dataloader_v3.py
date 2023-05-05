@@ -26,7 +26,8 @@ class V3Dataset(Dataset):
                  lag: int = 1,
                  max_lag: int = 7,
                  horizon: int = 4,
-                 validation_days: int = 14
+                 validation_days: int = 14,
+                 inference_type: int = 2022
                  ):
         super().__init__()
         assert pm_type in ['PM10', 'PM25'], f"Unknown pm type: {pm_type}"
@@ -52,6 +53,7 @@ class V3Dataset(Dataset):
         self.data_path = data_path
         self.lag = lag
         self.horizon = horizon
+        self.inference_type = inference_type
 
         self.file_name = os.path.join(predict_region,
                                       f'{predict_region}_{representative_region}_period_{period_version}_rmgroup_{rm_region}_v3')
