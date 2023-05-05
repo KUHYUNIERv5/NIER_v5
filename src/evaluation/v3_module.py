@@ -60,7 +60,7 @@ class V3_Runner:
         self.tmp_dir = os.path.join(self.root_dir, 'tmp')
         self.csv_dir = os.path.join(self.root_dir, 'id_list.csv')
         # TODO: update _make_top_exps() function for adding twick settings (drop some key in model_types, ...)
-        self.model_num = None
+
         self.r4_res = None
         self.cmaq_res = None
         self.dataset_bundles = None
