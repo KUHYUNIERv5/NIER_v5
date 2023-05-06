@@ -13,6 +13,7 @@ import pandas as pd
 import numpy as np
 
 from src.dataset.dataloader_v3 import V3Dataset
+from src.models import SingleInceptionModel_v2, DoubleInceptionModel_v2, SingleInceptionCRNN_v2, DoubleInceptionCRNN_v2
 from src.utils import load_data, concatenate
 from sklearn.metrics import confusion_matrix
 
@@ -36,7 +37,8 @@ class V3_Runner:
                  validation_days=7,
                  model_num=25,
                  add_r4_models=True,
-                 add_cmaq_model=True):
+                 add_cmaq_model=True,
+                 model_args=None):
         super().__init__()
 
         self.region = region if type(region) is str else f"R4_{region}"
@@ -52,6 +54,7 @@ class V3_Runner:
         self.model_num = model_num
         self.add_r4_models = add_r4_models
         self.add_cmaq_model = add_cmaq_model
+        self.model_args = model_args
         self.result_columns = ['period_version', 'rm_region', 'esv_year', 'lag', 'sampling', 'run_type', 'model',
                                'model_type', 'val_f1', 'val_accuracy', 'val_pod', 'val_far']
 
@@ -78,6 +81,38 @@ class V3_Runner:
         winner = votes.most_common(1)[0][0]
         return winner
 
+    def initialize_model(self, e, model_args, dropout=.1):
+        if e.horizon > 3:
+            is_point_added = True
+        else:
+            is_point_added = False
+        is_reg = True if e.run_type == 'regression' else False
+
+        net = None
+
+        if e.model == 'CNN':
+            if e.model_type == 'single':
+                net = SingleInceptionModel_v2(dropout=dropout, reg=is_reg, added_point=is_point_added,
+                                              **model_args)
+            elif e.model_type == 'double':
+                net = DoubleInceptionModel_v2(dropout=dropout, reg=is_reg, added_point=is_point_added,
+                                              **model_args)
+            else:
+                net = DoubleInceptionModel_v2(dropout=dropout, reg=is_reg, added_point=is_point_added,
+                                              **model_args)
+        elif e.model == 'RNN':
+            if e.model_type == 'single':
+                net = SingleInceptionCRNN_v2(dropout=dropout, reg=is_reg, rnn_type='GRU',
+                                             added_point=is_point_added, **model_args)
+            elif e.model_type == 'double':
+                net = DoubleInceptionCRNN_v2(dropout=dropout, reg=is_reg, rnn_type='GRU',
+                                             added_point=is_point_added, **model_args)
+            else:
+                net = DoubleInceptionCRNN_v2(dropout=dropout, reg=is_reg, rnn_type='GRU',
+                                             added_point=is_point_added, **model_args)
+
+        return net
+
     def _load_data_model(self):
         start_time = time.time()
         dataset_bundles = []
@@ -92,7 +127,12 @@ class V3_Runner:
 
             model_file_name = f'{e.id}.pkl'
             model_data = load_data(os.path.join(self.model_dir, model_file_name))
-            net = model_data['network']
+
+            self.model_args['lag'] = e.lag
+
+            net = self.initialize_model(e, self.model_args)
+            # net = model_data['network']
+
             net.load_state_dict(model_data['model_weights'][esv_year])
 
             model_pools.append(deepcopy(net))
