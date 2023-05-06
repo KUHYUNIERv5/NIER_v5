@@ -26,32 +26,32 @@ def initialize_model(e, dropout=.1):
         obs_dim=pca_dim['obs'],
         fnl_dim=pca_dim['fnl'],
         num_dim=pca_dim['numeric'],
-        lag=int(e['lag'][0])
+        lag=e.lag
     )
 
-    if e.horizon[0] > 3:
+    if e.horizon > 3:
         is_point_added = True
     else:
         is_point_added = False
-    is_reg = True if e.run_type[0] == 'regression' else False
+    is_reg = True if e.run_type == 'regression' else False
 
     net = None
 
-    if e.model[0] == 'CNN':
-        if e.model_type[0] == 'single':
+    if e.model == 'CNN':
+        if e.model_type == 'single':
             net = SingleInceptionModel_v2(dropout=dropout, reg=is_reg, added_point=is_point_added,
                                           **model_args)
-        elif e.model_type[0] == 'double':
+        elif e.model_type == 'double':
             net = DoubleInceptionModel_v2(dropout=dropout, reg=is_reg, added_point=is_point_added,
                                           **model_args)
         else:
             net = DoubleInceptionModel_v2(dropout=dropout, reg=is_reg, added_point=is_point_added,
                                           **model_args)
-    elif e.model[0] == 'RNN':
-        if e.model_type[0] == 'single':
+    elif e.model == 'RNN':
+        if e.model_type == 'single':
             net = SingleInceptionCRNN_v2(dropout=dropout, reg=is_reg, rnn_type='GRU',
                                          added_point=is_point_added, **model_args)
-        elif e.model_type[0] == 'double':
+        elif e.model_type == 'double':
             net = DoubleInceptionCRNN_v2(dropout=dropout, reg=is_reg, rnn_type='GRU',
                                          added_point=is_point_added, **model_args)
         else:
@@ -62,8 +62,8 @@ def initialize_model(e, dropout=.1):
 
 
 def convert_model_save(ids, model_dir, exp_settings):
-    for i in ids:
-        e = exp_settings[exp_settings.id == i]
+    for index, i in enumerate(ids):
+        e = exp_settings.iloc[index]
         saved_models = load_data(os.path.join(model_dir, f'{i}.pkl'))
         net = initialize_model(e)
         net.load_state_dict(saved_models['model_weights'][2021])

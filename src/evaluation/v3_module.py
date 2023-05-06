@@ -92,7 +92,7 @@ class V3_Runner:
             obs_dim=pca_dim['obs'],
             fnl_dim=pca_dim['fnl'],
             num_dim=pca_dim['numeric'],
-            lag=int(e['lag'][0])
+            lag=int(e.lag)
         )
 
         if e.horizon > 3:
