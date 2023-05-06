@@ -18,19 +18,6 @@ import argparse
 
 
 def main(region, pm_type, save_dir, data_dir, root_dir, r4_dir, cmaq_dir):
-    pca_dim = dict(  # 건드리면 안됨
-        obs=256,
-        fnl=512,
-        wrf=128,
-        cmaq=512,
-        numeric=512
-    )
-
-    model_args = dict(
-        obs_dim=pca_dim['obs'],
-        fnl_dim=pca_dim['fnl'],
-        num_dim=pca_dim['numeric'],
-    ),
 
     args_dict = dict(
         region=region,
@@ -45,8 +32,7 @@ def main(region, pm_type, save_dir, data_dir, root_dir, r4_dir, cmaq_dir):
         validation_days=7,
         model_num=100,
         add_r4_models=True,
-        add_cmaq_model=True,
-        model_args=model_args
+        add_cmaq_model=True
     )
 
     horizons = [4, 5, 6]

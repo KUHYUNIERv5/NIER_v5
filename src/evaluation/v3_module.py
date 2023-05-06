@@ -37,8 +37,7 @@ class V3_Runner:
                  validation_days=7,
                  model_num=25,
                  add_r4_models=True,
-                 add_cmaq_model=True,
-                 model_args=None):
+                 add_cmaq_model=True):
         super().__init__()
 
         self.region = region if type(region) is str else f"R4_{region}"
@@ -54,7 +53,6 @@ class V3_Runner:
         self.model_num = model_num
         self.add_r4_models = add_r4_models
         self.add_cmaq_model = add_cmaq_model
-        self.model_args = model_args
         self.result_columns = ['period_version', 'rm_region', 'esv_year', 'lag', 'sampling', 'run_type', 'model',
                                'model_type', 'val_f1', 'val_accuracy', 'val_pod', 'val_far']
 
@@ -81,7 +79,22 @@ class V3_Runner:
         winner = votes.most_common(1)[0][0]
         return winner
 
-    def initialize_model(self, e, model_args, dropout=.1):
+    def initialize_model(self, e, dropout=.1):
+        pca_dim = dict(  # 건드리면 안됨
+            obs=256,
+            fnl=512,
+            wrf=128,
+            cmaq=512,
+            numeric=512
+        )
+
+        model_args = dict(
+            obs_dim=pca_dim['obs'],
+            fnl_dim=pca_dim['fnl'],
+            num_dim=pca_dim['numeric'],
+            lag=int(e['lag'][0])
+        )
+
         if e.horizon > 3:
             is_point_added = True
         else:
@@ -128,9 +141,7 @@ class V3_Runner:
             model_file_name = f'{e.id}.pkl'
             model_data = load_data(os.path.join(self.model_dir, model_file_name))
 
-            self.model_args['lag'] = e.lag
-
-            net = self.initialize_model(e, self.model_args)
+            net = self.initialize_model(e)
             # net = model_data['network']
 
             net.load_state_dict(model_data['model_weights'][esv_year])
