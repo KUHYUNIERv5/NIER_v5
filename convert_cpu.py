@@ -26,32 +26,32 @@ def initialize_model(e, dropout=.1):
         obs_dim=pca_dim['obs'],
         fnl_dim=pca_dim['fnl'],
         num_dim=pca_dim['numeric'],
-        lag=e.lag
+        lag=int(e['lag'][0])
     )
 
-    if e.horizon > 3:
+    if e.horizon[0] > 3:
         is_point_added = True
     else:
         is_point_added = False
-    is_reg = True if e.run_type == 'regression' else False
+    is_reg = True if e.run_type[0] == 'regression' else False
 
     net = None
 
-    if e.model == 'CNN':
-        if e.model_type == 'single':
+    if e.model[0] == 'CNN':
+        if e.model_type[0] == 'single':
             net = SingleInceptionModel_v2(dropout=dropout, reg=is_reg, added_point=is_point_added,
                                           **model_args)
-        elif e.model_type == 'double':
+        elif e.model_type[0] == 'double':
             net = DoubleInceptionModel_v2(dropout=dropout, reg=is_reg, added_point=is_point_added,
                                           **model_args)
         else:
             net = DoubleInceptionModel_v2(dropout=dropout, reg=is_reg, added_point=is_point_added,
                                           **model_args)
-    elif e.model == 'RNN':
-        if e.model_type == 'single':
+    elif e.model[0] == 'RNN':
+        if e.model_type[0] == 'single':
             net = SingleInceptionCRNN_v2(dropout=dropout, reg=is_reg, rnn_type='GRU',
                                          added_point=is_point_added, **model_args)
-        elif e.model_type == 'double':
+        elif e.model_type[0] == 'double':
             net = DoubleInceptionCRNN_v2(dropout=dropout, reg=is_reg, rnn_type='GRU',
                                          added_point=is_point_added, **model_args)
         else:
