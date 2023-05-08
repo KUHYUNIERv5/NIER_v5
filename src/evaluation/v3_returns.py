@@ -10,8 +10,8 @@ import numpy as np
 from sklearn.metrics import confusion_matrix
 
 class V3Output(OrderedDict):
-    def __init__(self, ensemble_prediction_ls, single_prediction_ls, label_ls, argsort_list, argsort_exp_list,
-                 f1sort_list, argsort_topk_list, validation_times, inference_times, total_times, make_result=True):
+    def __init__(self, ensemble_prediction_ls=None, single_prediction_ls=None, label_ls=None, argsort_list=None, argsort_exp_list=None,
+                 f1sort_list=None, argsort_topk_list=None, validation_times=None, inference_times=None, total_times=None, make_result=True):
         super().__init__()
         self.ensemble_prediction_ls = ensemble_prediction_ls
         self.single_prediction_ls = single_prediction_ls
@@ -29,6 +29,7 @@ class V3Output(OrderedDict):
                                               np.array(ensemble_prediction_ls, dtype=np.float32))
             self.single_res = self._evaluation(np.array(label_ls, dtype=np.float32),
                                             np.array(single_prediction_ls, dtype=np.float32))
+
 
     def _evaluation(self, y_list, pred_list, is_r4=False):
         """

@@ -523,9 +523,21 @@ class V3_Runner:
             inference_times.append(time.time() - test_now)
             total_times.append(time.time() - now)
 
-        return_obj = V3Output(
-            ensemble_prediction_ls, single_prediction_ls, label_ls, argsort_list, argsort_exp_list,
-            f1sort_list, argsort_topk_list, validation_times, inference_times, total_times
+        return_obj = dict(
+            ensemble_prediction_ls=ensemble_prediction_ls,
+            single_prediction_ls=single_prediction_ls,
+            label_ls=label_ls,
+            argsort_list=argsort_list,
+            argsort_exp_list=argsort_exp_list,
+            f1sort_list=f1sort_list,
+            argsort_topk_list=argsort_topk_list,
+            validation_times=validation_times,
+            inference_times=inference_times,
+            total_times=total_times
         )
+        return_obj['ensemble_res'] = self._evaluation(np.array(label_ls, dtype=np.float32),
+                                          np.array(ensemble_prediction_ls, dtype=np.float32))
+        return_obj['single_res'] = self._evaluation(np.array(label_ls, dtype=np.float32),
+                                        np.array(single_prediction_ls, dtype=np.float32))
 
         return return_obj
