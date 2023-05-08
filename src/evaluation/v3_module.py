@@ -463,6 +463,8 @@ class V3_Runner:
     def run_v3(self, top_k=9, model_type_keys=None, debug=False, equality_on=False):
         if self.dataset_bundles is None:
             self.initialize()
+        if model_type_keys is None:
+            model_type_keys = ['cls_rnn', 'cls_cnn', 'reg_rnn', 'reg_cnn']
         ensemble_prediction_ls = []
         single_prediction_ls = []
         label_ls = []

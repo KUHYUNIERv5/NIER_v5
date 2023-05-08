@@ -90,7 +90,7 @@ def main(region, pm_type, save_dir, data_dir, root_dir, r4_dir, cmaq_dir, horizo
                 val_f1_limit = 1.1 if mod == 0 else 1.0
 
                 v3_obj.initialize(model_type_keys, val_f1_limit)
-                res = v3_obj.run_v3(top_k=num_top_k, equality_on=equality_on)
+                res = v3_obj.run_v3(top_k=num_top_k, model_type_keys=model_type_keys, equality_on=equality_on)
                 # print(save_name)
                 save_data(res, save_dir, save_name)
 
