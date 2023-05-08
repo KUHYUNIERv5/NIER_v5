@@ -17,7 +17,7 @@ import os
 import argparse
 
 
-def main(region, pm_type, save_dir, data_dir, root_dir, r4_dir, cmaq_dir):
+def main(region, pm_type, save_dir, data_dir, root_dir, r4_dir, cmaq_dir, debug=False):
 
     args_dict = dict(
         region=region,
@@ -35,32 +35,50 @@ def main(region, pm_type, save_dir, data_dir, root_dir, r4_dir, cmaq_dir):
         add_cmaq_model=True
     )
 
-    horizons = [4, 5, 6]
+    if debug:
+        horizon = 4
+        mod = 0
+        model_type_mod = 0
+        num_top_k = 5
 
-    for horizon in horizons:
         args_dict['horizon'] = horizon
         v3_obj = V3_Runner(**args_dict)
 
-        hyp_params = dict(
-            mod=[0, 1],
-            model_type_mod=[0, 1],
-            num_top_k=[5, 15, 25]
-        )
+        save_name = f'pm{pm_type}_horizon{horizon}_modeltype{model_type_mod}_f1limit{mod}_numtopk{num_top_k}.pkl'
+        model_type_keys = ['cls_rnn', 'reg_rnn', 'reg_cnn'] if model_type_mod == 1 else None
+        val_f1_limit = 1.1 if mod == 0 else 1.0
 
-        obj_list = list(ParameterGrid(hyp_params))
+        v3_obj.initialize(model_type_keys, val_f1_limit)
+        res = v3_obj.run_v3(top_k=num_top_k, debug=debug)
+        save_data(res, save_dir, save_name)
+    else:
 
-        for obj in obj_list:
-            mod = obj['mod']
-            model_type_mod = obj['model_type_mod']
-            num_top_k = obj['num_top_k']
+        horizons = [4, 5, 6]
 
-            save_name = f'pm{pm_type}_horizon{horizon}_modeltype{model_type_mod}_f1limit{mod}_numtopk{num_top_k}.pkl'
-            model_type_keys = ['cls_rnn', 'reg_rnn', 'reg_cnn'] if model_type_mod == 1 else None
-            val_f1_limit = 1.1 if mod == 0 else 1.0
+        for horizon in horizons:
+            args_dict['horizon'] = horizon
+            v3_obj = V3_Runner(**args_dict)
 
-            v3_obj.initialize(model_type_keys, val_f1_limit)
-            res = v3_obj.run_v3(top_k=num_top_k)
-            save_data(res, save_dir, save_name)
+            hyp_params = dict(
+                mod=[0, 1],
+                model_type_mod=[0, 1],
+                num_top_k=[5, 15, 25]
+            )
+
+            obj_list = list(ParameterGrid(hyp_params))
+
+            for obj in obj_list:
+                mod = obj['mod']
+                model_type_mod = obj['model_type_mod']
+                num_top_k = obj['num_top_k']
+
+                save_name = f'pm{pm_type}_horizon{horizon}_modeltype{model_type_mod}_f1limit{mod}_numtopk{num_top_k}.pkl'
+                model_type_keys = ['cls_rnn', 'reg_rnn', 'reg_cnn'] if model_type_mod == 1 else None
+                val_f1_limit = 1.1 if mod == 0 else 1.0
+
+                v3_obj.initialize(model_type_keys, val_f1_limit)
+                res = v3_obj.run_v3(top_k=num_top_k)
+                save_data(res, save_dir, save_name)
 
 
 if __name__ == "__main__":
@@ -88,4 +106,4 @@ if __name__ == "__main__":
     save_dir = os.path.join(save_dir, region)
     os.makedirs(save_dir, exist_ok=True)
 
-    main(region, pm_type, save_dir, data_dir, root_dir, r4_dir, cmaq_dir)
+    main(region, pm_type, save_dir, data_dir, root_dir, r4_dir, cmaq_dir, debug=args.debug)

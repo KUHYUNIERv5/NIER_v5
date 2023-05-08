@@ -460,7 +460,7 @@ class V3_Runner:
 
         return ensembled_prediction, test_pred_score, ensemble_label
 
-    def run_v3(self, top_k=9):
+    def run_v3(self, top_k=9, debug=False):
         if self.dataset_bundles is None:
             self.initialize()
         ensemble_prediction_ls = []
@@ -476,7 +476,9 @@ class V3_Runner:
         argsort_topk_list = []
         argsort_exp_list = []
 
-        for i in tqdm(range(self.max_length)):
+        time_scope = range(2) if debug else range(self.max_length)
+
+        for i in tqdm(time_scope):
             now = time.time()
             num_additional_models = 0
             ####### validation #######
