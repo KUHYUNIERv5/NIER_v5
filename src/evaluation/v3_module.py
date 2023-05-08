@@ -460,7 +460,7 @@ class V3_Runner:
 
         return ensembled_prediction, test_pred_score, ensemble_label
 
-    def run_v3(self, top_k=9, debug=False):
+    def run_v3(self, top_k=9, model_type_keys=None, debug=False, equality_on=False):
         if self.dataset_bundles is None:
             self.initialize()
         ensemble_prediction_ls = []
@@ -474,7 +474,6 @@ class V3_Runner:
         argsort_list = []
         f1sort_list = []
         argsort_topk_list = []
-        argsort_exp_list = []
 
         time_scope = range(2) if debug else range(self.max_length)
 
@@ -502,13 +501,18 @@ class V3_Runner:
             test_now = time.time()
 
             ####### test #######
+            argsorts_topk = None
+            argsorts = None
             if np.mean(f1_list) <= 0:
                 argsorts = np.random.permutation(len(f1_list))
+                argsorts_topk = argsorts[:top_k]
+            elif equality_on:
+                _, argsorts_topk = select_top_k_models_equally(f1_list[:self.model_num], exp_settings=self.exp_settings, model_types=model_type_keys, top_k=top_k)
             else:
                 argsorts = np.argsort(f1_list)[::-1][:]
+                argsorts_topk = argsorts[:top_k]
             f1_list_sorted = np.sort(f1_list)[::-1][:]
 
-            argsorts_topk = argsorts[:top_k]
             argsorts_ = [arg for arg in argsorts_topk if arg < self.model_num]
 
             ensembled_pred, single_pred, label = self._v3_test(argsorts_topk, idx_to_key=idx_to_key, day_idx=i,
@@ -520,7 +524,6 @@ class V3_Runner:
             argsort_topk_list.append(argsorts_topk)
             f1sort_list.append(f1_list_sorted)
             argsort_list.append(argsorts)
-            argsort_exp_list.append(self.exp_settings.iloc[argsorts_][self.result_columns])
 
             inference_times.append(time.time() - test_now)
             total_times.append(time.time() - now)
@@ -530,7 +533,7 @@ class V3_Runner:
             single_prediction_ls=single_prediction_ls,
             label_ls=label_ls,
             argsort_list=argsort_list,
-            argsort_exp_list=argsort_exp_list,
+            argsort_exp_list=self.exp_settings,
             f1sort_list=f1sort_list,
             argsort_topk_list=argsort_topk_list,
             validation_times=validation_times,
@@ -543,3 +546,60 @@ class V3_Runner:
                                         np.array(single_prediction_ls, dtype=np.float32))
 
         return return_obj
+
+
+def is_even(num):
+    if num % 2 == 0:
+        return True
+    else:
+        return False
+
+
+def select_top_k_models_equally(f1_list, exp_settings, model_types, top_k):
+    """
+    Select the top k model settings for each of the specified model types, based on F1 score.
+
+    Parameters:
+    f1_list (list): A list of F1 scores, corresponding to the model settings in `exp_settings`.
+    exp_settings (pandas.DataFrame): A DataFrame containing the model settings.
+    model_types (list): A list of model types to select top models for (e.g., ['cls_rnn', 'cls_cnn', 'reg_rnn', 'reg_cnn']).
+    top_k (int): The number of top-performing models to select for each model type.
+
+    Returns:
+    A list of tuples, where each tuple contains the model type, model index, and F1 score of a top-performing model.
+    """
+    # Create a dictionary to map model types to column filters
+    type_filters = {
+        'cls_rnn': (exp_settings['run_type'] == 'classification') & (exp_settings['model'] == 'RNN'),
+        'cls_cnn': (exp_settings['run_type'] == 'classification') & (exp_settings['model'] == 'CNN'),
+        'reg_rnn': (exp_settings['run_type'] == 'regression') & (exp_settings['model'] == 'RNN'),
+        'reg_cnn': (exp_settings['run_type'] == 'regression') & (exp_settings['model'] == 'CNN'),
+    }
+
+    top_k_ = top_k // len(model_types)
+
+    top_models = []
+    top_k_indice_list = []
+    for idx, model_type in enumerate(model_types):
+        # Filter the DataFrame to include only the specified model type
+        mask = type_filters[model_type]
+        filtered_settings = exp_settings[mask]
+        filtered_f1 = f1_list[mask]
+
+        # Get the indices of the top-k models based on F1 score
+        top_indices = filtered_f1.argsort()[::-1]
+
+        if (is_even(top_k_) or (not is_even(top_k_) and is_even(len(model_types)))) and idx == 0:
+            top_k_indices = top_indices[:top_k_ + 1]
+        else:
+            top_k_indices = top_indices[:top_k_]
+
+        top_k_settings = filtered_settings.iloc[top_k_indices]
+        print(idx, len(top_k_indices), top_k_, top_k_settings.index.values, type(top_k_settings.index.values))
+        top_k_indice_list.append(top_k_settings.index.values)
+        top_models.append(filtered_settings.iloc[top_k_indices])
+
+    top_k_indice_list = np.concatenate(top_k_indice_list)
+    top_models = pd.concat(top_models)
+
+    return top_models, top_k_indice_list

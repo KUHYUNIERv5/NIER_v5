@@ -31,6 +31,21 @@ class V3Output(OrderedDict):
                                             np.array(single_prediction_ls, dtype=np.float32))
 
 
+    def summary(self):
+        keys, counts = np.unique(self.ensemble_prediction_ls, return_counts=True)
+        ens_labels = [f'label {k}: {c}' for k, c in zip(keys, counts)]
+        keys, counts = np.unique(self.single_prediction_ls, return_counts=True)
+        single_label = [f'label {k}: {c}' for k, c in zip(keys, counts)]
+        keys, counts = np.unique(self.label_ls, return_counts=True)
+        y_label = [f'label {k}: {c}' for k, c in zip(keys, counts)]
+
+        str_output = f"ensemble prediction result info | unique keys: {ens_labels}\n" \
+                     f"best model prediction result info | unique keys: {single_label}\n" \
+                     f"label info | unique keys: {y_label}\n" \
+                     f""
+
+
+
     def _evaluation(self, y_list, pred_list, is_r4=False):
         """
         **필요시 변경해야 함(현재는 단기 팀 세팅 따름)**
