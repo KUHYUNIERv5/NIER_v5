@@ -507,7 +507,9 @@ class V3_Runner:
                 argsorts = np.random.permutation(len(f1_list))
                 argsorts_topk = argsorts[:top_k]
             elif equality_on:
-                _, argsorts_topk = select_top_k_models_equally(f1_list[:self.model_num], exp_settings=self.exp_settings, model_types=model_type_keys, top_k=top_k)
+                argsorts = np.argsort(f1_list)[::-1][:]
+                _, argsorts_topk = select_top_k_models_equally(f1_list[:self.model_num], exp_settings=self.exp_settings,
+                                                               model_types=model_type_keys, top_k=top_k)
             else:
                 argsorts = np.argsort(f1_list)[::-1][:]
                 argsorts_topk = argsorts[:top_k]
@@ -538,7 +540,8 @@ class V3_Runner:
             argsort_topk_list=argsort_topk_list,
             validation_times=validation_times,
             inference_times=inference_times,
-            total_times=total_times
+            total_times=total_times,
+            version='v0.5'
         )
         return_obj['ensemble_res'] = self._evaluation(np.array(label_ls, dtype=np.float32),
                                           np.array(ensemble_prediction_ls, dtype=np.float32))

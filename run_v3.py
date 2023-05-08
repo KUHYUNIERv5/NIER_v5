@@ -17,7 +17,8 @@ import os
 import argparse
 
 
-def main(region, pm_type, save_dir, data_dir, root_dir, r4_dir, cmaq_dir, hyp_params=None, debug=False, equality=0):
+def main(region, pm_type, save_dir, data_dir, root_dir, r4_dir, cmaq_dir, horizons=None, hyp_params=None,
+         debug=False, equality=0):
     args_dict = dict(
         region=region,
         device='cpu',
@@ -41,10 +42,15 @@ def main(region, pm_type, save_dir, data_dir, root_dir, r4_dir, cmaq_dir, hyp_pa
             num_top_k=[5, 15, 25]
         )
 
+    if horizons is None:
+        horizons = [4, 5, 6]
+
+    print('parameters and horizons: ', hyp_params, horizons)
+
     equality_on = True if equality == 1 else False
 
     if debug:
-        horizon = 4
+        horizon = horizons[0]
         mod = 0
         model_type_mod = 0
         num_top_k = 5
@@ -52,17 +58,18 @@ def main(region, pm_type, save_dir, data_dir, root_dir, r4_dir, cmaq_dir, hyp_pa
         args_dict['horizon'] = horizon
         v3_obj = V3_Runner(**args_dict)
 
-        save_name = f'pm{pm_type}_horizon{horizon}_modeltype{model_type_mod}_f1limit{mod}_numtopk{num_top_k}.pkl'
+        if equality_on:
+            save_name = f'pm{pm_type}_horizon{horizon}_modeltype{model_type_mod}_f1limit{mod}_numtopk{num_top_k}_eq.pkl'
+        else:
+            save_name = f'pm{pm_type}_horizon{horizon}_modeltype{model_type_mod}_f1limit{mod}_numtopk{num_top_k}.pkl'
         model_type_keys = ['cls_rnn', 'reg_rnn', 'reg_cnn'] if model_type_mod == 1 else None
         val_f1_limit = 1.1 if mod == 0 else 1.0
 
         v3_obj.initialize(model_type_keys, val_f1_limit)
-        res = v3_obj.run_v3(top_k=num_top_k, debug=debug)
+        res = v3_obj.run_v3(top_k=num_top_k, equality_on=equality_on, debug=debug)
         save_data(res, save_dir, save_name)
+        # print(save_name)
     else:
-
-        horizons = [4, 5, 6]
-
         for horizon in horizons:
             args_dict['horizon'] = horizon
             v3_obj = V3_Runner(**args_dict)
@@ -77,12 +84,14 @@ def main(region, pm_type, save_dir, data_dir, root_dir, r4_dir, cmaq_dir, hyp_pa
                     save_name = f'pm{pm_type}_horizon{horizon}_modeltype{model_type_mod}_f1limit{mod}_numtopk{num_top_k}_eq.pkl'
                 else:
                     save_name = f'pm{pm_type}_horizon{horizon}_modeltype{model_type_mod}_f1limit{mod}_numtopk{num_top_k}.pkl'
+                print(save_name)
 
                 model_type_keys = ['cls_rnn', 'reg_rnn', 'reg_cnn'] if model_type_mod == 1 else None
                 val_f1_limit = 1.1 if mod == 0 else 1.0
 
                 v3_obj.initialize(model_type_keys, val_f1_limit)
                 res = v3_obj.run_v3(top_k=num_top_k, equality_on=equality_on)
+                # print(save_name)
                 save_data(res, save_dir, save_name)
 
 
@@ -93,6 +102,7 @@ if __name__ == "__main__":
     parser.add_argument('--pm_type', '-p', type=str, default="PM10")
     parser.add_argument('--region', '-r', help='input region', default='R4_68')
     parser.add_argument('--equality', '-e', type=int, default=0)
+    parser.add_argument('--horizons', '-ho', type=int, nargs='+', default=[4, 5, 6])
     parser.add_argument('--root_dir', '-rd', type=str, help='directory to save results',
                         default='/workspace/results/v5_phase2/')
     parser.add_argument('--data_dir', '-dd', type=str, default='/workspace/R5_phase2/')
@@ -112,11 +122,15 @@ if __name__ == "__main__":
     save_dir = os.path.join(save_dir, region)
     os.makedirs(save_dir, exist_ok=True)
 
+    hyp_params = None
+
     if args.equality == 1:
         hyp_params = dict(
             mod=[0],
             model_type_mod=[0, 1],
             num_top_k=[15, 25]
         )
+    print(args.equality, hyp_params, args.horizons)
 
-    main(region, pm_type, save_dir, data_dir, root_dir, r4_dir, cmaq_dir, hyp_params, debug=args.debug, equality=args.equality)
+    main(region, pm_type, save_dir, data_dir, root_dir, r4_dir, cmaq_dir, horizons=args.horizons, hyp_params=hyp_params,
+         debug=args.debug, equality=args.equality)
