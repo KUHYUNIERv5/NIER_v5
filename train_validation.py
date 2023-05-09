@@ -346,7 +346,7 @@ if __name__ == "__main__":
     root_dir = args.root_dir
     run_cv = args.run_cv
     print(f"training starting at {current_time.strftime('%Y-%m-%d %H:%M:%S')} with run cv = {run_cv} debug mode {debug}")
-    if debug and not run_cv:
+    if debug:
         root_dir = os.path.join(root_dir, 'debugging')
     else:
         root_dir = os.path.join(root_dir, region)
