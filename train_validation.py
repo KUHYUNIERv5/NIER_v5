@@ -292,20 +292,21 @@ def multi_gpu(params):
 
 
 def reset_all():
-    result_dir = os.path.join(root_dir, 'results')
-    model_dir = os.path.join(root_dir, 'models')
-    tmp_dir = os.path.join(root_dir, 'tmp')
+    if not os.path.exists(os.path.join(root_dir, 'id_list.csv')):
+        result_dir = os.path.join(root_dir, 'results')
+        model_dir = os.path.join(root_dir, 'models')
+        tmp_dir = os.path.join(root_dir, 'tmp')
 
-    if os.path.exists(result_dir):
-        rmdir(Path(result_dir))
-    if os.path.exists(model_dir):
-        rmdir(Path(model_dir))
-    if os.path.exists(tmp_dir):
-        rmdir(Path(tmp_dir))
+        if os.path.exists(result_dir):
+            rmdir(Path(result_dir))
+        if os.path.exists(model_dir):
+            rmdir(Path(model_dir))
+        if os.path.exists(tmp_dir):
+            rmdir(Path(tmp_dir))
 
-    os.makedirs(result_dir, exist_ok=True)
-    os.makedirs(model_dir, exist_ok=True)
-    os.makedirs(tmp_dir, exist_ok=True)
+        os.makedirs(result_dir, exist_ok=True)
+        os.makedirs(model_dir, exist_ok=True)
+        os.makedirs(tmp_dir, exist_ok=True)
 
 
 if __name__ == "__main__":

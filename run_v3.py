@@ -128,7 +128,7 @@ if __name__ == "__main__":
         hyp_params = dict(
             mod=[0],
             model_type_mod=[0, 1],
-            num_top_k=[15, 25]
+            num_top_k=[5, 15, 25, 35],
         )
     print(args.equality, hyp_params, args.horizons)
 
