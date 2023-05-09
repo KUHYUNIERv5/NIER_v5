@@ -600,7 +600,7 @@ def select_top_k_models_equally(f1_list, exp_settings, model_types, top_k):
             top_k_indices = top_indices[:top_k_]
 
         top_k_settings = filtered_settings.iloc[top_k_indices]
-        print(idx, len(top_k_indices), top_k_, top_k_settings.index.values, type(top_k_settings.index.values))
+        # print(idx, len(top_k_indices), top_k_, top_k_settings.index.values, type(top_k_settings.index.values))
         top_k_indice_list.append(top_k_settings.index.values)
         top_models.append(filtered_settings.iloc[top_k_indices])
 
