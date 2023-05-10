@@ -223,9 +223,14 @@ def main(device, pm_type, horizon, predict_region, representative_region, period
             run_type = 'regression' if inner_grid['is_reg'] else 'classification'
 
             is_included = check_condition(resume_df, grid['sampling'], grid['lag'], inner_grid['model_name'],
-                                          inner_grid['model_type'], run_type)
+                                          inner_grid['model_type'], run_type, representative_region, period_version,
+                                          rm_region)
 
             if resume and is_included:
+                print(
+                    f"resuming training. skip this condtion: {grid['sampling']} {grid['lag']} "
+                    f"{inner_grid['model_name']} {inner_grid['model_type']} {run_type} {representative_region}"
+                    f"{period_version} {rm_region}")
                 continue
 
             net, best_model_weights, val_dict, test_dict, cv_f1_score, cv_results \
