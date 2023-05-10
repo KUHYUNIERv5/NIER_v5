@@ -8,7 +8,7 @@
 
 from src.trainer import BasicTrainer
 from src.dataset import NIERDataset
-from src.utils import save_data, read_yaml, get_region_grid, rmdir
+from src.utils import save_data, read_yaml, get_region_grid, rmdir, load_data
 from sklearn.model_selection import ParameterGrid
 from pathlib import Path
 
@@ -22,6 +22,7 @@ import os
 import pandas as pd
 import numpy as np
 import datetime
+
 
 def arg_config(debug_mode=False):  # ['PM10', 'PM25'] # [3,4,5,6]
     global numeric_scenario, numeric_type, numeric_data_handling, model_ver, seed, lr, dropout, pca_dim
@@ -155,7 +156,8 @@ def run_trainer(train_set, valid_sets, test_set, predict_region, pm_type, horizo
 
     if run_cv:
         # cv result
-        net, best_model_weights, kfold_models, cv_f1_score, cv_results = trainer.cross_validate(train_set, **train_val_dict)
+        net, best_model_weights, kfold_models, cv_f1_score, cv_results = trainer.cross_validate(train_set,
+                                                                                                **train_val_dict)
         val_dict = {}
         test_dict = {}
     else:
@@ -182,7 +184,7 @@ def run_trainer(train_set, valid_sets, test_set, predict_region, pm_type, horizo
 
 
 def main(device, pm_type, horizon, predict_region, representative_region, period_version, rm_region, esv_years,
-         semaphore, debug_mode=False):
+         semaphore, debug_mode=False, resume=False):
     id_list = []
     n_epochs, batch_size, grids = arg_config(debug_mode)
     result_dir = os.path.join(root_dir, 'results')
@@ -214,10 +216,18 @@ def main(device, pm_type, horizon, predict_region, representative_region, period
                                                                     pca_dim, numeric_type, seed=seed)
 
         for inner_grid in inner_grids:
+
             # configuration ID
             setting_id = uuid.uuid4()
 
             run_type = 'regression' if inner_grid['is_reg'] else 'classification'
+
+            is_included = check_condition(resume_df, grid['sampling'], grid['lag'], inner_grid['model_name'],
+                                          inner_grid['model_type'], run_type)
+
+            if resume and is_included:
+                continue
+
             net, best_model_weights, val_dict, test_dict, cv_f1_score, cv_results \
                 = run_trainer(train_set, valid_sets, test_set, predict_region, pm_type, horizon, obs_dim, esv_years,
                               grid['sampling'], grid['lag'], inner_grid['is_reg'], inner_grid['model_name'],
@@ -273,6 +283,17 @@ def main(device, pm_type, horizon, predict_region, representative_region, period
     return id_list
 
 
+def check_condition(df, oversampling, lag, model_name, model_type, run_type, representative_region, period_version,
+                    rm_region):
+    condition = (df['sampling'] == oversampling) & (df['lag'] == lag) & (df['run_type'] == run_type) & (
+            df['model'] == model_name) & (df['model_type'] == model_type) & (
+                        df['representative_region'] == representative_region) & (
+                        df['period_version'] == period_version) & (df['rm_region'] == rm_region)
+
+    # Check if condition is included in DataFrame
+    return condition.any()
+
+
 def multi_gpu(params):
     gpu_idx = gpus.pop()
     sema = semaphore.pop()
@@ -282,7 +303,8 @@ def multi_gpu(params):
     id_list = main(device, params['pm_type'], params['horizon'], params['predict_region'], \
                    representative_region=params['representative_region'], \
                    period_version=params['periods'], rm_region=params['remove_regions'], \
-                   esv_years=params['esv_years'], debug_mode=params['debug_mode'], semaphore=sema)
+                   esv_years=params['esv_years'], debug_mode=params['debug_mode'], semaphore=sema,
+                   resume=params['resume'])
 
     print(f'Process end {device}')
 
@@ -309,8 +331,25 @@ def reset_all():
         os.makedirs(tmp_dir, exist_ok=True)
 
 
+def resume_train():
+    tmp_dir = os.path.join(root_dir, 'tmp')
+    file_list = []
+    for file in os.listdir(tmp_dir):
+        if file.endswith('.pkl'):
+            file_list.append(load_data(os.path.join(tmp_dir, file)))
+            print(os.path.join(tmp_dir, file))
+    file_list = np.concatenate(file_list)
+    for i in range(len(file_list)):
+        file_list[i]['id'] = str(file_list[i]['id'])
+    file_list = file_list.tolist()
+    file_df = pd.DataFrame(file_list)
+    save_data(file_list, tmp_dir, f'resumed_list.pkl')
+
+    return file_df, file_list
+
+
 if __name__ == "__main__":
-    global return_id_lists, root_dir, data_dir, co2_load, run_cv
+    global return_id_lists, root_dir, data_dir, co2_load, run_cv, resume_list, resume_df
     import logging
 
     now = datetime.datetime.now()
@@ -319,7 +358,7 @@ if __name__ == "__main__":
         print("Directory '%s' created successfully" % '../logs')
     except OSError as error:
         print("Directory '%s' can not be created")
-    
+
     logging.basicConfig(filename=f'../logs/error_{now.strftime("%Y-%m-%d %H:%M:%S")}.log', level=logging.DEBUG,
                         format='%(asctime)s %(levelname)s %(name)s %(message)s')
     logger = logging.getLogger(__name__)
@@ -329,6 +368,7 @@ if __name__ == "__main__":
     parser.add_argument('--debug', '-d', action="store_true")
     parser.add_argument('--reset', '-r', action="store_true")
     parser.add_argument('--run_cv', '-rc', action="store_true")
+    parser.add_argument('--resume', '-rs', action="store_true")
     parser.add_argument('--gpu_list', '-gl', type=int, nargs='+', default=[0, 1, 2, 3, 4, 5, 6, 7])
     parser.add_argument('--region', help='input region', default='R4_62')
     parser.add_argument('--co2', '-c', type=bool, help='load co2 data or not', default=False)
@@ -345,7 +385,8 @@ if __name__ == "__main__":
     co2_load = args.co2
     root_dir = args.root_dir
     run_cv = args.run_cv
-    print(f"training starting at {current_time.strftime('%Y-%m-%d %H:%M:%S')} with run cv = {run_cv} debug mode {debug}")
+    print(
+        f"training starting at {current_time.strftime('%Y-%m-%d %H:%M:%S')} with run cv = {run_cv} debug mode {debug}")
     if debug:
         root_dir = os.path.join(root_dir, 'debugging')
     else:
@@ -357,12 +398,16 @@ if __name__ == "__main__":
         root_dir = os.path.join(root_dir, f'cv')
 
     os.makedirs(root_dir, exist_ok=True)
-
+    resume_list = None
+    resume_df = None
 
     data_dir = args.data_dir
-    if args.reset:
+    if args.reset and not args.resume:
         reset_all()
+    if args.resume:
+        resume_df, resume_list = resume_train()
     obj = {
+        'resume': [args.resume],
         'debug_mode': [debug],
         'predict_region': [region],
         'horizon': [3, 4, 5, 6],
@@ -396,8 +441,8 @@ if __name__ == "__main__":
     except Exception as error:
         logger.error(error)
 
-
-
     return_id_lists = list(chain(*return_id_lists))
     return_id_lists = pd.DataFrame(return_id_lists)
+    if args.resume:
+        return_id_lists = pd.concat([resume_df, return_id_lists])
     return_id_lists.to_csv(os.path.join(root_dir, f'id_list.csv'), index=False)
