@@ -16,8 +16,8 @@ import torch
 
 
 class XAIDataset(ABC):
-    def __init__(self, region, pm_type, horizon, lag, period_version, rm_region, predict_date='20210501',
-                 data_dir='/workspace/R5_phase2/', root_dir='/workspace/results/v5_phase2/'):
+    def __init__(self, region, pm_type, horizon, lag, period_version, rm_region, data_dir='/workspace/R5_phase2/',
+                 root_dir='/workspace/results/v5_phase2/'):
         super().__init__()
 
         self.y = None
@@ -45,7 +45,6 @@ class XAIDataset(ABC):
         self.region = region
         self.pm_type = pm_type
         self.horizon = horizon
-        self.predict_date = predict_date
         self.data_dir = data_dir
         self.root_dir = os.path.join(root_dir, region)
 
@@ -114,8 +113,8 @@ class XAIDataset(ABC):
         flag = dataset_datetime.isin([start_date, target_date]).sum()
         return flag, dataset_datetime
 
-    def select_date(self, ):
-        target_date = pd.to_datetime(self.predict_date)
+    def select_date(self, predict_date='20220501'):
+        target_date = pd.to_datetime(predict_date)
         target_date = target_date + pd.Timedelta(hours=self.standard_time)
         start_date = target_date - pd.Timedelta(days=self.lag) + pd.Timedelta(hours=6)
         data_flag, dataset_datetime = self._date_check(start_date, target_date)
