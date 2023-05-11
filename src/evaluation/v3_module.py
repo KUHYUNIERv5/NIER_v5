@@ -321,7 +321,8 @@ class V3_Runner:
         pred_obs = torch.cat([pred_obs, pred_obs])
         pred_fnl = torch.cat([pred_fnl, pred_fnl])
         pred_num = torch.cat([pred_num, pred_num])
-        point_num = torch.cat([point_num, point_num])
+        if self.horizon != 3:
+            point_num = torch.cat([point_num, point_num])
 
         x_pred = net(pred_obs, pred_fnl, pred_num, point_num)
         x_pred = x_pred[0].unsqueeze(0)

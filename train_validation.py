@@ -216,28 +216,26 @@ def main(device, pm_type, horizon, predict_region, representative_region, period
                                                                     pca_dim, numeric_type, seed=seed)
 
         for inner_grid in inner_grids:
-
             # configuration ID
             setting_id = uuid.uuid4()
 
             run_type = 'regression' if inner_grid['is_reg'] else 'classification'
 
-            is_included = check_condition(resume_df, grid['sampling'], grid['lag'], inner_grid['model_name'],
-                                          inner_grid['model_type'], run_type, representative_region, period_version,
-                                          rm_region)
-
-            if resume and is_included:
-                print(
-                    f"resuming training. skip this condtion: {grid['sampling']} {grid['lag']} "
-                    f"{inner_grid['model_name']} {inner_grid['model_type']} {run_type} {representative_region}"
-                    f"{period_version} {rm_region}")
-                continue
+            if resume:
+                is_included = check_condition(resume_df, grid['sampling'], grid['lag'], inner_grid['model_name'],
+                                              inner_grid['model_type'], run_type, representative_region, period_version,
+                                              rm_region)
+                if is_included:
+                    print(
+                        f"resuming training. skip this condtion: {grid['sampling']} {grid['lag']} "
+                        f"{inner_grid['model_name']} {inner_grid['model_type']} {run_type} {representative_region}"
+                        f"{period_version} {rm_region}")
+                    continue
 
             net, best_model_weights, val_dict, test_dict, cv_f1_score, cv_results \
                 = run_trainer(train_set, valid_sets, test_set, predict_region, pm_type, horizon, obs_dim, esv_years,
                               grid['sampling'], grid['lag'], inner_grid['is_reg'], inner_grid['model_name'],
                               inner_grid['model_type'], n_epochs, dropout, device, batch_size=batch_size)
-
             if run_cv:
                 results = {
                     'id': setting_id,
@@ -338,7 +336,11 @@ def reset_all():
 
 def resume_train():
     tmp_dir = os.path.join(root_dir, 'tmp')
-    file_list = []
+    if os.path.exists(os.path.join(tmp_dir, 'resumed_list.pkl')):
+        file_list = load_data(os.path.join(tmp_dir, 'resumed_list.pkl'))
+    else:
+        file_list = []
+
     for file in os.listdir(tmp_dir):
         if file.endswith('.pkl'):
             file_list.append(load_data(os.path.join(tmp_dir, file)))
@@ -348,7 +350,7 @@ def resume_train():
         file_list[i]['id'] = str(file_list[i]['id'])
     file_list = file_list.tolist()
     file_df = pd.DataFrame(file_list)
-    save_data(file_list, tmp_dir, f'resumed_list.pkl')
+    save_data(file_list, tmp_dir, 'resumed_list.pkl')
 
     return file_df, file_list
 
@@ -391,7 +393,7 @@ if __name__ == "__main__":
     root_dir = args.root_dir
     run_cv = args.run_cv
     print(
-        f"training starting at {current_time.strftime('%Y-%m-%d %H:%M:%S')} with run cv = {run_cv} debug mode {debug}")
+        f"training starting at {current_time.strftime('%Y-%m-%d %H:%M:%S')} with run cv = {run_cv} debug mode {debug} {args.resume}")
     if debug:
         root_dir = os.path.join(root_dir, 'debugging')
     else:

@@ -35,11 +35,16 @@ def main(region, pm_type, save_dir, data_dir, root_dir, r4_dir, cmaq_dir, horizo
         add_cmaq_model=True
     )
 
+    pm10_all = [59, 60, 61, 62, 63, 67, 68, 71, 73, 74, 75, 77]
+    pm10_all = [f'R4_{i}' for i in pm10_all]
+    pm25_all = [59, 60, 61, 62, 63, 65, 66, 67, 68, 69, 72, 73, 76]
+    pm25_all = [f'R4_{i}' for i in pm25_all]
+
     if hyp_params is None:
         hyp_params = dict(
-            mod=[0, 1],
+            mod=[0],
             model_type_mod=[0, 1],
-            num_top_k=[5, 15, 25]
+            num_top_k=[5, 15, 25, 35]
         )
 
     if horizons is None:
@@ -55,22 +60,42 @@ def main(region, pm_type, save_dir, data_dir, root_dir, r4_dir, cmaq_dir, horizo
         model_type_mod = 0
         num_top_k = 5
 
+        if horizon == 3:
+            if (pm_type == 'PM10' and region in pm10_all) or (pm_type == 'PM25' and region in pm25_all):
+                h3_root_dir = os.path.join(root_dir, 'horizon_3_all')
+            else:
+                h3_root_dir = os.path.join(root_dir, 'horizon_3')
+            args_dict['root_dir'] = h3_root_dir
+        else:
+            args_dict['root_dir'] = root_dir
+
         args_dict['horizon'] = horizon
+        print(args_dict)
         v3_obj = V3_Runner(**args_dict)
 
         if equality_on:
             save_name = f'pm{pm_type}_horizon{horizon}_modeltype{model_type_mod}_f1limit{mod}_numtopk{num_top_k}_eq.pkl'
         else:
             save_name = f'pm{pm_type}_horizon{horizon}_modeltype{model_type_mod}_f1limit{mod}_numtopk{num_top_k}.pkl'
+        print(save_name)
         model_type_keys = ['cls_rnn', 'reg_rnn', 'reg_cnn'] if model_type_mod == 1 else None
         val_f1_limit = 1.1 if mod == 0 else 1.0
 
         v3_obj.initialize(model_type_keys, val_f1_limit)
-        res = v3_obj.run_v3(top_k=num_top_k, equality_on=equality_on, debug=debug)
+        res = v3_obj.run_v3(top_k=num_top_k, model_type_keys=model_type_keys, equality_on=equality_on, debug=debug)
         save_data(res, save_dir, save_name)
-        # print(save_name)
+
     else:
         for horizon in horizons:
+            if horizon == 3:
+                if (pm_type == 'PM10' and region in pm10_all) or (pm_type == 'PM25' and region in pm25_all):
+                    h3_root_dir = os.path.join(root_dir, 'horizon_3_all')
+                else:
+                    h3_root_dir = os.path.join(root_dir, 'horizon_3')
+                args_dict['root_dir'] = h3_root_dir
+            else:
+                args_dict['root_dir'] = root_dir
+
             args_dict['horizon'] = horizon
             v3_obj = V3_Runner(**args_dict)
 
