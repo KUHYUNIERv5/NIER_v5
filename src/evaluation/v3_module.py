@@ -137,6 +137,9 @@ class V3_Runner:
             now = time.time()
             e = self.exp_settings.iloc[i]
             esv_year = e.esv_year
+            representative_region = e.representative_region
+            if (self.region == 'R4_63' or self.region == 'R4_65') and 'horizon_3_all' in self.root_dir:
+                representative_region = 'R4_67'
 
             model_file_name = f'{e.id}.pkl'
             model_data = load_data(os.path.join(self.model_dir, model_file_name))
@@ -154,7 +157,7 @@ class V3_Runner:
                 predict_region=self.region,
                 pm_type=e.pm_type,
                 rm_region=e.rm_region,
-                representative_region=e.representative_region,
+                representative_region=representative_region,
                 period_version=e.period_version,
                 data_path=self.data_dir,
                 lag=e.lag,
